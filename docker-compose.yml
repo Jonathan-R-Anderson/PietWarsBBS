@@ -18,3 +18,8 @@ services:
     stdin_open: true 
     tty: true
     restart: always
+
+  piet:
+    build: ./src/piet
+    container_name: piet
+    restart: always
