@@ -53,13 +53,11 @@ def render_board(stdscr):
             time.sleep(1)
             continue
 
-        stdscr.addstr(0, 0, "Curses is running!", curses.color_pair(1))
-
 
         grid = board_data["board"]
         colors = board_data["colors"]
 
-        #stdscr.clear()
+        stdscr.clear()
 
         for row_idx, row in enumerate(grid):
             for col_idx, cell in enumerate(row):
