@@ -1,16 +1,8 @@
 import sys
 import os
 from flask import request, jsonify
+from piet import PietInterpreter  # Import Piet logic
 
-# Ensure the parent directory is in Python's module search path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Try importing the Piet interpreter
-try:
-    from driver import PietInterpreter  # Import Piet logic
-except ModuleNotFoundError:
-    print("❌ Error: Could not find 'piet.driver'. Check your PYTHONPATH and imports.")
-    sys.exit(1)  # Stop execution if import fails
 
 
 ### 🛠 Validation Functions ###
