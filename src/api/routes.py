@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Try importing the Piet interpreter
 try:
-    from piet.driver import PietInterpreter  # Import Piet logic
+    from driver import PietInterpreter  # Import Piet logic
 except ModuleNotFoundError:
     print("❌ Error: Could not find 'piet.driver'. Check your PYTHONPATH and imports.")
     sys.exit(1)  # Stop execution if import fails
