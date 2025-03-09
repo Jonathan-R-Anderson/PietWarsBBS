@@ -41,23 +41,28 @@ def setup_curses(stdscr):
     curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)
 
 def render_board(stdscr):
-    """Continuously fetch & render board in real-time using curses."""
+    """Continuously fetch & render the board in real-time using curses."""
     setup_curses(stdscr)
 
     while True:
         board_data = fetch_board()
 
-        if "board" not in board_data or "colors" not in board_data:
-            stdscr.addstr(0, 0, "Error: API response invalid", curses.color_pair(1))
+        if board_data is None:
+            stdscr.addstr(0, 0, "❌ Error: Unable to retrieve board data.", curses.color_pair(1))
             stdscr.refresh()
             time.sleep(1)
-            continue
+            continue  # Retry after 1 second
 
+        if "board" not in board_data or "colors" not in board_data:
+            stdscr.addstr(0, 0, "⚠️ API returned invalid data.", curses.color_pair(1))
+            stdscr.refresh()
+            time.sleep(1)
+            continue  # Retry after 1 second
+
+        stdscr.clear()
 
         grid = board_data["board"]
         colors = board_data["colors"]
-
-        stdscr.clear()
 
         for row_idx, row in enumerate(grid):
             for col_idx, cell in enumerate(row):
@@ -68,9 +73,7 @@ def render_board(stdscr):
                     stdscr.addch(row_idx, col_idx * 2, "█", curses.color_pair(color_pair))
 
         stdscr.refresh()
-
         time.sleep(0.5)
-
-
+        
 if __name__ == "__main__":
     curses.wrapper(render_board)  # Run curses application
