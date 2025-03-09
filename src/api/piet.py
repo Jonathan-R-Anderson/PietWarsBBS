@@ -20,6 +20,22 @@ class PietInterpreter:
         self.direction = (1, 0)  # Start moving right
         self.running = True
 
+    def is_valid(self):
+        """
+        Validate if the board follows proper Piet rules.
+        
+        Returns:
+        - True: If execution is possible
+        - False: If illegal instructions are detected
+        """
+        x, y = self.position
+
+        if not (0 <= x < len(self.board[0]) and 0 <= y < len(self.board)):
+            return False  # Out-of-bounds is invalid
+        
+        curr_color = self.get_color(x, y)
+        return curr_color in self.PIET_COLORS  # Only allow valid Piet colors
+
     def get_color(self, x, y):
         """Return the color at position (x, y) or empty string if out of bounds."""
         if 0 <= x < len(self.board[0]) and 0 <= y < len(self.board):
