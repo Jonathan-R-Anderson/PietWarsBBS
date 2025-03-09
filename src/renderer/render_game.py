@@ -3,7 +3,7 @@ import requests
 import os
 import curses
 
-API_URL = "http://api:5000/get_board"  # Fetch JSON board state
+API_URL = "http://127.0.0.1:5000/get_board"  # Fetch JSON board state
 
 # Define ANSI color mappings (adjustable)
 COLOR_MAP = {
