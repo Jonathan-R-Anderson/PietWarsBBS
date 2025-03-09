@@ -1,0 +1,6 @@
+PySocks
+stem
+kademlia
+pillow
+termgl
+flask

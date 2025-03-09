@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  api:
+    build: ./src/api
+    container_name: game_api
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    restart: always
+
+  renderer:
+    build: ./src/renderer
+    container_name: game_renderer
+    depends_on:
+      - api
+    stdin_open: true 
+    tty: true
+    restart: always
