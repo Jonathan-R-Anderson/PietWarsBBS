@@ -1,10 +1,18 @@
+import curses
+
 class PietInterpreter:
     """Interprets Piet code directly from the game board array, optimizing execution."""
 
     # Piet color cycle
     PIET_COLORS = [
-        "\\033[31m", "\\033[33m", "\\033[32m", "\\033[36m", "\\033[34m", "\\033[35m"
+        curses.COLOR_RED,
+        curses.COLOR_YELLOW,
+        curses.COLOR_GREEN,
+        curses.COLOR_CYAN,
+        curses.COLOR_BLUE,
+        curses.COLOR_MAGENTA
     ]
+
 
     def __init__(self, board, colors):
         """
