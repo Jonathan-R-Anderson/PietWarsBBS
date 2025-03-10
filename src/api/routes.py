@@ -4,8 +4,17 @@ from flask import request, jsonify
 from piet import PietInterpreter  # Import Piet logic
 
 
-
 ### 🛠 Validation Functions ###
+
+def is_valid_color(color):
+    """
+    Check if the provided color is a valid Piet color.
+    
+    :param color: The color string.
+    :return: Boolean (True if valid, False if invalid)
+    """
+    return color in PietInterpreter.VALID_PIET_COLORS
+
 
 def validate_modification(board, x, y, new_color):
     """
@@ -17,6 +26,9 @@ def validate_modification(board, x, y, new_color):
     :param new_color: New color to apply
     :return: Boolean (True if valid, False if invalid)
     """
+    if not is_valid_color(new_color):
+        return False  # Reject invalid colors immediately
+
     temp_board = [row[:] for row in board.board]  # Copy board
     temp_colors = [row[:] for row in board.colors]  # Copy colors
 
@@ -40,6 +52,9 @@ def modify_board(board, x, y, color):
     :param color: New color
     :return: Dictionary with success status and updated board state
     """
+    if not is_valid_color(color):
+        return {"error": f"Invalid color '{color}'. Must be one of {list(PietInterpreter.VALID_PIET_COLORS)}"}, 400
+
     if validate_modification(board, x, y, color):
         success = board.set_color(x, y, color)
         return {
@@ -61,13 +76,11 @@ def register_routes(app, board):
         """
         API: Modifies a color on the board if it is valid.
         
-        Request JSON: { "x": <int>, "y": <int>, "color": "<ANSI Code>" }
+        Request JSON: { "x": <int>, "y": <int>, "color": "<color_name>" }
         Response: { "success": <bool>, "board": [...], "colors": [...] }
         """
         data = request.json
         x, y, color = data.get("x"), data.get("y"), data.get("color")
-
-        print(f"data: {data}")
 
         if x is None or y is None or color is None:
             return jsonify({"error": "Missing x, y, or color"}), 400

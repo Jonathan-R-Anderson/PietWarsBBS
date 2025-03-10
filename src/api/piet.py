@@ -3,16 +3,19 @@ import curses
 class PietInterpreter:
     """Interprets Piet code directly from the game board array, optimizing execution."""
 
-    # Piet color cycle
-    PIET_COLORS = [
-        curses.COLOR_RED,
-        curses.COLOR_YELLOW,
-        curses.COLOR_GREEN,
-        curses.COLOR_CYAN,
-        curses.COLOR_BLUE,
-        curses.COLOR_MAGENTA
-    ]
+    # Flipped Piet color map (String → Curses Color Constant)
+    PIET_COLOR_MAP = {
+        "red": curses.COLOR_RED,
+        "yellow": curses.COLOR_YELLOW,
+        "green": curses.COLOR_GREEN,
+        "cyan": curses.COLOR_CYAN,
+        "blue": curses.COLOR_BLUE,
+        "magenta": curses.COLOR_MAGENTA,
+        "black": curses.COLOR_BLACK
+    }
 
+    # Define valid Piet colors for validation
+    VALID_PIET_COLORS = set(PIET_COLOR_MAP.keys())
 
     def __init__(self, board, colors):
         """
@@ -29,6 +32,13 @@ class PietInterpreter:
         self.running = True
         self.execution_cache = set()  # Stores executed (x, y) positions
 
+    def get_color(self, x, y):
+        """Return the string color name at position (x, y) or None if out of bounds."""
+        if 0 <= x < len(self.board[0]) and 0 <= y < len(self.board):
+            color_value = self.colors[y][x]
+            return next((name for name, code in self.PIET_COLOR_MAP.items() if code == color_value), None)
+        return None  # Treat out-of-bounds as no-op
+
     def is_valid(self, x, y):
         """
         Validate if the instruction at (x, y) follows Piet rules.
@@ -40,13 +50,7 @@ class PietInterpreter:
         if not (0 <= x < len(self.board[0]) and 0 <= y < len(self.board)):
             return False  # Out-of-bounds is invalid
         
-        return self.get_color(x, y) in self.PIET_COLORS  # Allow only valid colors
-
-    def get_color(self, x, y):
-        """Return the color at position (x, y) or empty string if out of bounds."""
-        if 0 <= x < len(self.board[0]) and 0 <= y < len(self.board):
-            return self.colors[y][x]
-        return ""  # Treat out-of-bounds as no-op
+        return self.get_color(x, y) in self.VALID_PIET_COLORS  # Allow only valid Piet colors
 
     def push(self, value):
         """Push a value onto the stack."""
@@ -66,8 +70,8 @@ class PietInterpreter:
         if prev_color == curr_color:  # No color change → Continue moving
             return
 
-        if prev_color in self.PIET_COLORS and curr_color in self.PIET_COLORS:
-            hue_change = self.PIET_COLORS.index(curr_color) - self.PIET_COLORS.index(prev_color)
+        if prev_color in self.VALID_PIET_COLORS and curr_color in self.VALID_PIET_COLORS:
+            hue_change = list(self.VALID_PIET_COLORS).index(curr_color) - list(self.VALID_PIET_COLORS).index(prev_color)
 
             if hue_change == 1:  # Addition
                 b, a = self.pop(), self.pop()
@@ -92,7 +96,7 @@ class PietInterpreter:
         new_x, new_y = x + dx, y + dy
 
         # Handle movement into black (blocked)
-        if self.get_color(new_x, new_y) == "\033[30m":
+        if self.get_color(new_x, new_y) == "black":
             self.direction = (-dx, -dy)  # Reverse direction
             return
 
