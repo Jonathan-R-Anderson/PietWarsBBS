@@ -42,6 +42,7 @@ def modify_board(board, x, y, color):
     """
     if validate_modification(board, x, y, color):
         success = board.set_color(x, y, color)
+        print(f"Success {success} color: {color}")
         return {
             "success": success,
             "board": board.board,
