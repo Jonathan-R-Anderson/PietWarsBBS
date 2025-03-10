@@ -25,7 +25,7 @@ def validate_modification(board, x, y, new_color):
     piet_interpreter = PietInterpreter(temp_board, temp_colors)
     piet_interpreter.run_step()  # Execute one step
 
-    return piet_interpreter.is_valid()
+    return piet_interpreter.is_valid(x, y)
 
 
 ### 🔄 Modification Functions ###
