@@ -63,7 +63,7 @@ def modify_board(board, x, y, color):
             "colors": board.colors
         }, 200 if success else 400
     else:
-        return {"error": "Invalid Piet instruction"}, 400
+        return {"error": f"Invalid Piet instruction vm: {validate_modification(board, x, y, color)} board: {board} x: {x} y: {y} color: {color}"}, 400
 
 
 ### 🎮 API Routes ###
