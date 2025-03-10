@@ -13,8 +13,10 @@ COLOR_MAP = {
     "\033[33m": 4,  # Yellow
     "\033[35m": 5,  # Magenta
     "\033[36m": 6,  # Cyan
-    "": 0           # Default (no color)
+    "\033[37m": 7,  # White (Default)
+    "": 7           # Default White for unknown colors
 }
+
 
 def fetch_board():
     """Fetch latest board state from API."""
@@ -27,18 +29,19 @@ def fetch_board():
     return None
 
 def setup_curses(stdscr):
-    """Initialize curses settings."""
+    """Initialize curses settings with proper color handling."""
     curses.curs_set(0)  # Hide cursor
     stdscr.clear()
     curses.start_color()
 
-    # Initialize color pairs
-    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    curses.init_pair(3, curses.COLOR_BLUE, curses.COLOR_BLACK)
-    curses.init_pair(4, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-    curses.init_pair(5, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
-    curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    # Use default terminal background (-1) to prevent conflicts
+    curses.init_pair(1, curses.COLOR_RED, -1)      # Red
+    curses.init_pair(2, curses.COLOR_GREEN, -1)    # Green
+    curses.init_pair(3, curses.COLOR_BLUE, -1)     # Blue
+    curses.init_pair(4, curses.COLOR_YELLOW, -1)   # Yellow
+    curses.init_pair(5, curses.COLOR_MAGENTA, -1)  # Magenta
+    curses.init_pair(6, curses.COLOR_CYAN, -1)     # Cyan
+    curses.init_pair(7, curses.COLOR_WHITE, -1)    # Default White
 
 def render_board(stdscr):
     """Continuously fetch & render the board in real-time using curses."""
@@ -67,13 +70,14 @@ def render_board(stdscr):
         for row_idx, row in enumerate(grid):
             for col_idx, cell in enumerate(row):
                 color_code = colors[row_idx][col_idx] if row_idx < len(colors) and col_idx < len(colors[0]) else ""
-                color_pair = COLOR_MAP.get(color_code, 0)  # Default to no color
+                color_pair = COLOR_MAP.get(color_code, 7)  # Default to white if unknown
                 
                 if cell.strip():  # Only draw non-empty characters
                     stdscr.addch(row_idx, col_idx * 2, "█", curses.color_pair(color_pair))
 
         stdscr.refresh()
         time.sleep(0.5)
-        
+
+
 if __name__ == "__main__":
     curses.wrapper(render_board)  # Run curses application
