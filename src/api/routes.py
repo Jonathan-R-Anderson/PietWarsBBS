@@ -68,10 +68,12 @@ def register_routes(app, board):
         data = request.json
         x, y, color = data.get("x"), data.get("y"), data.get("color")
 
+        print(f"data: {data}")
+
         if x is None or y is None or color is None:
             return jsonify({"error": "Missing x, y, or color"}), 400
 
-        return jsonify(*modify_board(board, x, y, color))
+        return jsonify(*modify_board(board, x, y, color)), 200
 
     @app.route("/clear_color", methods=["POST"])
     def clear_color():
