@@ -32,16 +32,25 @@ def setup_curses(stdscr):
     """Initialize curses settings with proper color handling."""
     curses.curs_set(0)  # Hide cursor
     stdscr.clear()
-    curses.start_color()
 
-    # Use default terminal background (-1) to prevent conflicts
-    curses.init_pair(1, curses.COLOR_RED, -1)      # Red
-    curses.init_pair(2, curses.COLOR_GREEN, -1)    # Green
-    curses.init_pair(3, curses.COLOR_BLUE, -1)     # Blue
-    curses.init_pair(4, curses.COLOR_YELLOW, -1)   # Yellow
-    curses.init_pair(5, curses.COLOR_MAGENTA, -1)  # Magenta
-    curses.init_pair(6, curses.COLOR_CYAN, -1)     # Cyan
-    curses.init_pair(7, curses.COLOR_WHITE, -1)    # Default White
+    # ✅ Check if terminal supports colors before enabling
+    if not curses.has_colors():
+        stdscr.addstr(0, 0, "❌ Error: Terminal does not support colors.")
+        stdscr.refresh()
+        time.sleep(2)
+        return
+
+    curses.start_color()  # ✅ Enable color support
+
+    # ✅ Fix: Use curses.COLOR_BLACK instead of -1 (some terminals don't support -1)
+    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(3, curses.COLOR_BLUE, curses.COLOR_BLACK)
+    curses.init_pair(4, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+    curses.init_pair(5, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+    curses.init_pair(6, curses.COLOR_CYAN, curses.COLOR_BLACK)
+    curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_BLACK)
+
 
 def render_board(stdscr):
     """Continuously fetch & render the board in real-time using curses."""
