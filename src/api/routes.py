@@ -26,8 +26,6 @@ def validate_modification(board, x, y, new_color):
     :param new_color: New color to apply
     :return: Boolean (True if valid, False if invalid)
     """
-    if not is_valid_color(new_color):
-        return False  # Reject invalid colors immediately
 
     temp_board = [row[:] for row in board.board]  # Copy board
     temp_colors = [row[:] for row in board.colors]  # Copy colors
