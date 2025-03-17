@@ -4,3 +4,6 @@ kademlia
 pillow
 termgl
 flask
+requests
+pillow
+numpy

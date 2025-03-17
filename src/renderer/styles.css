@@ -1,0 +1,30 @@
+#left_panel {
+    width: 30%;
+    height: 90%; /* Adjusted to leave space for the marquee */
+}
+
+#middle_panel {
+    width: 35%;
+    height: 90%; /* Adjusted to leave space for the marquee */
+}
+
+#right_panel {
+    width: 35%;
+    height: 90%; /* Adjusted to leave space for the marquee */
+}
+
+#marquee {
+    width: 100%;
+    height: 10%; /* Occupies the bottom 10% */
+    align: center middle; /* Centered horizontally */
+}
+
+#codel_overlay {
+    position: absolute;
+    align: left bottom;
+    width: auto;
+    height: auto;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 1 2;
+    border: round yellow;
+}

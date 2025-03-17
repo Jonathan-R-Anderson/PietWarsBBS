@@ -9,7 +9,10 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     build-base \
-    ncurses-dev
+    ncurses \
+    ncurses-dev \
+    && rm -rf /var/cache/apk/*
+
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt

@@ -1,0 +1,138 @@
+import requests
+from functools import partial
+from textual.app import App, ComposeResult
+from textual.containers import Container, VerticalScroll
+from textual.widgets import Static, Header, Footer
+from textual.reactive import reactive
+from textual.command import Provider, Hit, Hits
+from textual.screen import Screen
+
+class BoardView(VerticalScroll):
+    """Scrollable and zoomable board display."""
+    
+    zoom_level = reactive(1)  # Initial zoom level
+
+    def on_mount(self) -> None:
+        """Initialize and start updating the board."""
+        self.static_widget = Static("")
+        self.mount(self.static_widget)
+        self.update_board()
+        self.set_interval(1, self.update_board)  # Refresh every second
+
+    def update_board(self) -> None:
+        """Fetch and update board content."""
+        board_data = fetch_board()
+        if not board_data:
+            self.static_widget.update("[red]Failed to fetch board data.[/red]")
+            return
+        
+        grid = board_data.get("board", [])
+        dimensions = fetch_board_dimensions()
+        
+        if not dimensions:
+            self.static_widget.update("[red]Failed to fetch board dimensions.[/red]")
+            return
+        
+        board_str = ""
+        for row in grid:
+            for cell in row:
+                # Directly use the color name or hex code from the cell
+                color = cell if cell else "white"  # Default to white if cell is empty
+                # Adjust block size based on zoom level
+                block = "█" * self.zoom_level
+                board_str += f"[{color}]{block}[/]"
+            board_str += "\n"
+
+        self.static_widget.update(board_str)
+
+    def adjust_zoom(self, level: int) -> None:
+        """Adjust the zoom level and update the board."""
+        self.zoom_level = max(1, self.zoom_level + level)
+        self.update_board()
+
+class ZoomCommandProvider(Provider):
+    """Command provider for zooming in and out."""
+
+    async def search(self, query: str) -> Hits:
+        """Search for zoom commands."""
+        matcher = self.matcher(query)
+        app = self.app
+        assert isinstance(app, BoardApp)
+
+        commands = [
+            ("zoom in", "Increase the zoom level", partial(app.zoom_in)),
+            ("zoom out", "Decrease the zoom level", partial(app.zoom_out)),
+        ]
+
+        for command, help_text, callback in commands:
+            score = matcher.match(command)
+            if score > 0:
+                yield Hit(
+                    score,
+                    matcher.highlight(command),
+                    callback,
+                    help=help_text,
+                )
+
+class BoardApp(App):
+    """Textual App to display the board with zoom and command palette."""
+
+    CSS = """
+    #left_panel {
+        width: 30%;
+        height: 100%;
+    }
+    #middle_panel {
+        width: 35%;
+        height: 100%;
+    }
+    #right_panel {
+        width: 35%;
+        height: 100%;
+    }
+    """
+
+    COMMANDS = {ZoomCommandProvider}
+
+    def compose(self) -> ComposeResult:
+        """Compose the UI layout."""
+        yield Header()
+        with Container():
+            self.board_view = BoardView(id="left_panel")
+            yield self.board_view
+            yield Static("Middle Panel Content", id="middle_panel")
+            yield Static("Right Panel Content", id="right_panel")
+        yield Footer()
+
+    def zoom_in(self) -> None:
+        """Increase the zoom level."""
+        self.board_view.adjust_zoom(1)
+
+    def zoom_out(self) -> None:
+        """Decrease the zoom level."""
+        self.board_view.adjust_zoom(-1)
+
+def fetch_board():
+    """Fetch the latest board state from the API."""
+    try:
+        API_URL = "http://127.0.0.1:5000/get_board"
+        response = requests.get(API_URL)
+        if response.status_code == 200:
+            return response.json()
+    except requests.ConnectionError:
+        pass  
+    return {"board": [["white" for _ in range(10)] for _ in range(10)]}  # Default 10x10 board
+
+def fetch_board_dimensions():
+    """Fetch the board dimensions from the API."""
+    try:
+        API_URL = "http://127.0.0.1:5000/get_dimensions"
+        response = requests.get(API_URL)
+        if response.status_code == 200:
+            return response.json()
+    except requests.ConnectionError:
+        pass  
+    return {"rows": 10, "cols": 10}  # Default dimensions
+
+if __name__ == "__main__":
+    BoardApp().run()
