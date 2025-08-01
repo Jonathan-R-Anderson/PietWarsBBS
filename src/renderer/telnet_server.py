@@ -9,13 +9,17 @@ PORT = 1337
 
 async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWriter) -> None:
     master_fd, slave_fd = pty.openpty()
+    bbs_path = os.path.join(os.path.dirname(__file__), 'bbs_app.py')
+    env = os.environ.copy()
+    src_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    env['PYTHONPATH'] = os.pathsep.join([src_root, env.get('PYTHONPATH', '')])
     process = await asyncio.create_subprocess_exec(
         sys.executable,
-        'bbs_app.py',
+        bbs_path,
         stdin=slave_fd,
         stdout=slave_fd,
         stderr=slave_fd,
-        env=os.environ.copy(),
+        env=env,
     )
     os.close(slave_fd)
     loop = asyncio.get_running_loop()
