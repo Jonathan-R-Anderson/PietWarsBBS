@@ -8,6 +8,8 @@ import numpy as np
 import threading
 import time
 
+from .state import state
+
 COLOR_MAPPING = {
     (255, 0, 0): "red",
     (0, 255, 0): "green",
@@ -18,19 +20,7 @@ COLOR_MAPPING = {
     (255, 255, 255): "white",
     (0, 0, 0): "black",
 }
-
-
-interpreter = None
-interpreter_lock = threading.Lock()
-execution_thread = None
-execution_lock = threading.Lock()
-stop_execution_flag = threading.Event()
-interpreter_output = ""
-output_lock = threading.Lock()
-
-# Dictionary to store terminal sizes per client IP
-terminal_sizes = {}
-previous_terminal_size = (None, None)
+# Shared state is managed in state.py
 def closest_color(rgb):
     """Find the closest known color by computing Euclidean distance in RGB space."""
     r, g, b = rgb  # Extract RGB values
@@ -181,7 +171,7 @@ def register_routes(app, board):
 
         # Store the terminal size for the client's IP address
         client_ip = request.remote_addr
-        terminal_sizes[client_ip] = {"rows": rows, "cols": cols}
+        state.terminal_sizes[client_ip] = {"rows": rows, "cols": cols}
 
         return jsonify({"message": "Terminal size updated", "rows": rows, "cols": cols}), 200
 
@@ -190,7 +180,7 @@ def register_routes(app, board):
     def get_terminal_size():
         """Return the stored terminal size for the requesting client."""
         client_ip = request.remote_addr
-        terminal_size = terminal_sizes.get(client_ip, {"rows": 100, "cols": 200})  # Default if not set
+        terminal_size = state.terminal_sizes.get(client_ip, {"rows": 100, "cols": 200})  # Default if not set
 
         return jsonify(terminal_size)
 
@@ -199,7 +189,6 @@ def register_routes(app, board):
     @app.route("/upload_image", methods=["POST"])
     def upload_image():
         """Receives a PNG file, scales it to terminal size, and updates the board."""
-        global previous_terminal_size
         DIMENSIONS_API_URL = "http://api:5000/set_dimensions"
 
         if "image" not in request.files:
@@ -220,9 +209,9 @@ def register_routes(app, board):
             return jsonify({"error": "Invalid terminal size received"}), 400
 
         # ✅ Reset board if terminal size has changed
-        if previous_terminal_size == (None, None) or previous_terminal_size != (rows, cols):
+        if state.previous_terminal_size == (None, None) or state.previous_terminal_size != (rows, cols):
             requests.post(DIMENSIONS_API_URL, json={"rows": rows, "cols": cols})  # Reset board size
-            previous_terminal_size = (rows, cols)
+            state.previous_terminal_size = (rows, cols)
 
         # ✅ Load and scale image
         image = Image.open(request.files["image"]).convert("RGB")  # Ensure it's in RGB format
@@ -249,53 +238,50 @@ def register_routes(app, board):
 
     @app.route('/start_execution', methods=['GET'])
     def start_execution():
-        global interpreter, execution_thread
         #data = request.json
         #program = data.get('program')
         #if not program:
         #    return jsonify({"error": "No program provided"}), 400
 
-        if execution_thread and execution_thread.is_alive():
+        if state.execution_thread and state.execution_thread.is_alive():
             return jsonify({"message": "Execution is already running"}), 400
 
-        stop_execution_flag.clear()
+        state.stop_execution_flag.clear()
 
         def execute_program():
-            while not interpreter.has_terminated() and not stop_execution_flag.is_set():
-                with execution_lock:
-                    interpreter.step()
+            while not state.interpreter.has_terminated() and not state.stop_execution_flag.is_set():
+                with state.execution_lock:
+                    state.interpreter.step()
                 time.sleep(0.1)  # Adjust sleep duration as needed
 
-        execution_thread = threading.Thread(target=execute_program, daemon=True)
-        execution_thread.start()
+        state.execution_thread = threading.Thread(target=execute_program, daemon=True)
+        state.execution_thread.start()
 
         return jsonify({"message": "Execution started"}), 200
 
     @app.route('/stop_execution', methods=['GET'])
     def stop_execution():
-        if execution_thread and execution_thread.is_alive():
-            stop_execution_flag.set()
-            execution_thread.join()
+        if state.execution_thread and state.execution_thread.is_alive():
+            state.stop_execution_flag.set()
+            state.execution_thread.join()
             return jsonify({"message": "Execution stopped"}), 200
         else:
             return jsonify({"message": "No execution is currently running"}), 400
 
     @app.route('/current_codel', methods=['GET'])
     def current_codel():
-        global interpreter
-        if interpreter is None:
+        if state.interpreter is None:
             return jsonify({"error": "Interpreter not initialized"}), 400
 
-        with execution_lock:
-            codel_position = interpreter.get_current_codel_position()
+        with state.execution_lock:
+            codel_position = state.interpreter.get_current_codel_position()
             return jsonify({"current_codel": codel_position}), 200
         
     @app.route('/load_piet', methods=['GET'])
     def load_piet():
-        global interpreter
-        if (board.board_loaded):
-            with interpreter_lock:
-                interpreter = PietInterpreter(board.board)
+        if board.board_loaded:
+            with state.interpreter_lock:
+                state.interpreter = PietInterpreter(board.board)
                 return jsonify({"message": "Interpreter initialized"}), 200
         else:
             return jsonify({'error': "Board is not loaded"})
@@ -304,9 +290,9 @@ def register_routes(app, board):
     def get_output():
         def fetch_output():
             nonlocal output_data
-            with output_lock:
-                if interpreter_output:
-                    output_data = interpreter_output
+            with state.output_lock:
+                if state.interpreter_output:
+                    output_data = state.interpreter_output
 
         output_data = None
         output_thread = threading.Thread(target=fetch_output)

@@ -1,6 +1,6 @@
 from flask import Flask
-from routes import register_routes
-from board import GameBoard  # Ensure this exists
+from .routes import register_routes
+from .board import GameBoard  # Ensure this exists
 import os
 
 def create_app():
