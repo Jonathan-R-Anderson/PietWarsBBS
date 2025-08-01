@@ -5,12 +5,14 @@ from textual.reactive import reactive
 
 
 class FancyMenuItem(ListItem):
-    """List item with simple slide and color animation when highlighted."""
+    """List item with slide, color animation, and a highlight arrow."""
 
     highlighted = reactive(False)
 
     def __init__(self, text: str, **kwargs) -> None:
-        super().__init__(Label(text), **kwargs)
+        self.label = Label(text)
+        super().__init__(self.label, **kwargs)
+        self.base_text = text
         self.styles.background = "black"
         self.styles.color = "green"
 
@@ -22,10 +24,12 @@ class FancyMenuItem(ListItem):
             self.styles.animate("offset_x", 2, duration=0.2)
             self.styles.animate("background", "green", duration=0.2)
             self.styles.animate("color", "black", duration=0.2)
+            self.label.update(f"> {self.base_text}")
         else:
             self.styles.animate("offset_x", 0, duration=0.2)
             self.styles.animate("background", "black", duration=0.2)
             self.styles.animate("color", "green", duration=0.2)
+            self.label.update(self.base_text)
 
 
 class FancyListView(ListView):
