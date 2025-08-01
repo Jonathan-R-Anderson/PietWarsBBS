@@ -40,7 +40,9 @@ async def run_game(reader, writer):
 async def games_menu(reader, writer):
     while True:
         try:
-            writer.write("\nGames Menu\n1. PietWars\n2. Back\nSelection: ")
+            # Clear the screen and move the cursor to the top before rendering the menu
+            writer.write("\x1b[2J\x1b[H")
+            writer.write("Games Menu\n1. PietWars\n2. Back\nSelection: ")
         except Exception:
             break
         choice = (await reader.readline()).strip()
@@ -61,7 +63,9 @@ async def shell(reader, writer):
         return
     while True:
         try:
-            writer.write("\nMain Menu\n1. /p/ Programming\n2. /g/ Games\n3. Quit\nSelection: ")
+            # Clear the screen and position the cursor at the top before showing the menu
+            writer.write("\x1b[2J\x1b[H")
+            writer.write("Main Menu\n1. /p/ Programming\n2. /g/ Games\n3. Quit\nSelection: ")
         except Exception:
             break
         choice = (await reader.readline()).strip()
