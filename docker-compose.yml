@@ -11,7 +11,9 @@ services:
     restart: always
 
   renderer:
-    build: ./src/renderer
+    build:
+      context: .
+      dockerfile: src/renderer/Dockerfile
     container_name: game_renderer
     depends_on:
       - api
