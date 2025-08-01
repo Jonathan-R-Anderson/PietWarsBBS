@@ -4,13 +4,11 @@ WORKDIR /app
 
 COPY . .
 
-# Install necessary system dependencies for ncurses and Python
+# Install Python runtime
 RUN apk add --no-cache \
     python3 \
     py3-pip \
     build-base \
-    ncurses \
-    ncurses-dev \
     && rm -rf /var/cache/apk/*
 
 

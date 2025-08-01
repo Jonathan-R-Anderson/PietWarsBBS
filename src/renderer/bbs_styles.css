@@ -1,0 +1,19 @@
+Screen {
+    background: black;
+    color: green;
+}
+
+#main_layout {
+    height: 100%;
+}
+
+#menu_panel {
+    width: 30%;
+    border: round green;
+    padding: 1 2;
+}
+
+#content {
+    width: 70%;
+    padding: 1 2;
+}
