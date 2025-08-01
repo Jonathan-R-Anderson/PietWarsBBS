@@ -4,7 +4,8 @@ import subprocess
 import sys
 import os
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static, ListView, ListItem, Label
+from textual.widgets import Header, Footer, Static, Label, ListView
+from .fancy_menu import FancyListView, FancyMenuItem
 from textual.containers import Horizontal, Container
 from textual.screen import Screen
 
@@ -20,9 +21,9 @@ class GameMenuScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header("Game Selection")
         with Container():
-            yield ListView(
-                ListItem(Label("PietWars", id="pietwars")),
-                ListItem(Label("Back", id="back")),
+            yield FancyListView(
+                FancyMenuItem("PietWars", id="pietwars"),
+                FancyMenuItem("Back", id="back"),
             )
         yield Footer()
 
@@ -58,10 +59,10 @@ class BBSApp(App):
         yield Header("PietChan BBS")
         with Horizontal(id="main_layout"):
             with Container(id="menu_panel"):
-                yield ListView(
-                    ListItem(Label("/p/ Programming")),
-                    ListItem(Label("/g/ Games")),
-                    ListItem(Label("Quit")),
+                yield FancyListView(
+                    FancyMenuItem("/p/ Programming"),
+                    FancyMenuItem("/g/ Games"),
+                    FancyMenuItem("Quit"),
                 )
             self.content = Static("Welcome to PietChan! Select a board from the menu.", id="content")
             yield self.content

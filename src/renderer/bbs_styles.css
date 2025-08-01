@@ -25,3 +25,10 @@ Screen {
     width: 70%;
     padding: 1 2;
 }
+
+FancyMenuItem {
+    height: auto;
+    padding: 0 1;
+    background: black;
+    color: green;
+}
