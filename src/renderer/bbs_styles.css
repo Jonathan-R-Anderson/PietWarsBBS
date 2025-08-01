@@ -13,17 +13,27 @@ Screen {
 
 #main_layout {
     height: 100%;
+    align-horizontal: center;
+    align-vertical: middle;
 }
 
 #menu_panel {
-    width: 30%;
+    width: 25%;
+    min-width: 20;
     border: round green;
     padding: 1 2;
+    dock: left;
+    align: center top;
 }
 
 #content {
-    width: 70%;
+    width: 75%;
     padding: 1 2;
+    dock: right;
+}
+
+FancyListView {
+    width: 100%;
 }
 
 FancyMenuItem {
