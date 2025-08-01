@@ -16,7 +16,7 @@ services:
     depends_on:
       - api
     ports:
-      - "8023:8023"
+      - "1337:1337"
     stdin_open: true
     tty: true
     restart: always

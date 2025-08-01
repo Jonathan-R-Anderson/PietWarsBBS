@@ -16,5 +16,5 @@ RUN apk add --no-cache \
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-EXPOSE 8023
+EXPOSE 1337
 CMD ["python3", "telnet_server.py"]
