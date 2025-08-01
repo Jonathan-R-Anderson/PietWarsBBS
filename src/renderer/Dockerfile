@@ -16,4 +16,5 @@ RUN apk add --no-cache \
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-CMD ["python3", "render_game.py"]
+EXPOSE 8023
+CMD ["python3", "telnet_server.py"]
