@@ -8,7 +8,7 @@ import numpy as np
 import threading
 import time
 
-from .state import state
+from state import state
 
 COLOR_MAPPING = {
     (255, 0, 0): "red",
