@@ -5,7 +5,12 @@ import sys
 import os
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Label, ListView
-from .fancy_menu import FancyListView, FancyMenuItem
+try:
+    # When executed as part of the package ``src.renderer`` use relative import
+    from .fancy_menu import FancyListView, FancyMenuItem
+except ImportError:  # pragma: no cover - fallback for running as script
+    # Fallback when the module is executed directly without package context
+    from fancy_menu import FancyListView, FancyMenuItem
 from textual.containers import Horizontal, Container
 from textual.screen import Screen
 
