@@ -1,0 +1,10 @@
+name: pietwars
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - socks
+    - stem
+    - pillow
