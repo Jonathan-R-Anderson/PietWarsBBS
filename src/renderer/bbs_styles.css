@@ -3,6 +3,14 @@ Screen {
     color: green;
 }
 
+#wallpaper {
+    layer: below;
+    opacity: 0.3;
+    dock: top;
+    width: 100%;
+    height: 100%;
+}
+
 #main_layout {
     height: 100%;
 }
