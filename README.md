@@ -14,5 +14,6 @@ global variables.
 Run the Docker Compose setup and connect via telnet to interact with the BBS.
 
 ```bash
-telnet localhost 8023
+telnet localhost 1337
 ```
+

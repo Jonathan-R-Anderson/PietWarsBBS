@@ -1,97 +1,59 @@
 import asyncio
+import os
+import sys
 import telnetlib3
-import aiohttp
+import pty
 
 HOST = '0.0.0.0'
-PORT = 8023
+PORT = 1337
 
-async def run_game(reader, writer):
-    try:
-        writer.write("Loading PietWars... Press 'q' to return.\n")
-    except Exception:
-        return
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                resp = await session.get('http://api:5000/render')
-                text = await resp.text()
-                if text.startswith('<pre>'):
-                    board = text[5:-6]
-                else:
-                    board = text
-            except Exception:
-                board = "Failed to fetch board." 
-            try:
-                writer.write('\x1b[2J\x1b[H')
-                writer.write(board + '\n')
-                writer.write("(press 'q' to exit game)\n")
-                await writer.drain()
-            except Exception:
-                break
-            try:
-                key = await asyncio.wait_for(reader.read(1), timeout=1.0)
-                if key.lower() == 'q':
+async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWriter) -> None:
+    master_fd, slave_fd = pty.openpty()
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        'bbs_app.py',
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        env=os.environ.copy(),
+    )
+    os.close(slave_fd)
+    loop = asyncio.get_running_loop()
+
+    async def forward_output():
+        try:
+            while True:
+                data = await loop.run_in_executor(None, os.read, master_fd, 1024)
+                if not data:
                     break
-            except asyncio.TimeoutError:
-                continue
-            except Exception:
-                break
-
-async def games_menu(reader, writer):
-    while True:
-        try:
-            # Clear the screen and move the cursor to the top before rendering the menu
-            writer.write("\x1b[2J\x1b[H")
-            writer.write("Games Menu\n1. PietWars\n2. Back\nSelection: ")
+                writer.write(data.decode(errors='ignore'))
+                await writer.drain()
         except Exception:
-            break
-        choice = (await reader.readline()).strip()
-        if choice == '1':
-            await run_game(reader, writer)
-        elif choice == '2':
-            return
-        else:
-            try:
-                writer.write("Invalid option.\n")
-            except Exception:
-                break
+            pass
 
-async def shell(reader, writer):
+    output_task = asyncio.create_task(forward_output())
+
     try:
-        writer.write("Welcome to PietChan BBS!\n")
+        while True:
+            data = await reader.read(1024)
+            if not data:
+                break
+            await loop.run_in_executor(None, os.write, master_fd, data.encode())
     except Exception:
-        return
-    while True:
+        pass
+    finally:
+        output_task.cancel()
         try:
-            # Clear the screen and position the cursor at the top before showing the menu
-            writer.write("\x1b[2J\x1b[H")
-            writer.write("Main Menu\n1. /p/ Programming\n2. /g/ Games\n3. Quit\nSelection: ")
-        except Exception:
-            break
-        choice = (await reader.readline()).strip()
-        if choice == '1':
-            try:
-                writer.write("You opened /p/ Programming.\n")
-            except Exception:
-                break
-        elif choice == '2':
-            await games_menu(reader, writer)
-        elif choice == '3' or choice.lower() == 'quit':
-            try:
-                writer.write("Goodbye!\n")
-            except Exception:
-                pass
-            break
-        else:
-            try:
-                writer.write("Invalid option.\n")
-            except Exception:
-                break
-    writer.close()
+            process.terminate()
+        except ProcessLookupError:
+            pass
+        await process.wait()
+        os.close(master_fd)
 
-async def main():
-    server = await telnetlib3.create_server(host=HOST, port=PORT, shell=shell)
-    await server.serve_forever()
+async def main() -> None:
+    server = await telnetlib3.create_server(host=HOST, port=PORT, shell=run_app)
+    async with server:
+        await server.serve_forever()
 
 if __name__ == '__main__':
     asyncio.run(main())
