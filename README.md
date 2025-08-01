@@ -4,15 +4,15 @@ This project is organized as a Python package under `src` with three main compon
 
 - `api` – Flask API serving board operations and Piet interpreter execution
 - `modules` – utility modules, including networking and a Textual-based loading effect
-- `renderer` – Textual UI for interacting with the board and the BBS menu
+- `renderer` – contains the Textual UI and a telnet server for BBS access
 
 Shared state for the API is maintained in `src/api/state.py` to avoid scattered
 global variables.
 
 ## Running the BBS
 
-Run the Textual BBS interface to access boards and launch the PietWars game:
+Run the Docker Compose setup and connect via telnet to interact with the BBS.
 
 ```bash
-python -m src.renderer.bbs_app
+telnet localhost 8023
 ```
