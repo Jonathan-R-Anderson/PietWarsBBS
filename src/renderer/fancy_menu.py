@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual.widgets import ListView, ListItem, Label
 from textual.reactive import reactive
+from textual.geometry import Coordinate
 
 
 class FancyMenuItem(ListItem):
@@ -29,7 +30,7 @@ class FancyMenuItem(ListItem):
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 2, duration=0.2)
             else:  # Textual >= 0.5
-                self.styles.animate("offset", (2, 0), duration=0.2)
+                self.styles.animate("offset", Coordinate(2, 0), duration=0.2)
             self.styles.animate("background", "green", duration=0.2)
             self.styles.animate("color", "black", duration=0.2)
             self.label.update(f"> {self.base_text}")
@@ -37,7 +38,7 @@ class FancyMenuItem(ListItem):
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 0, duration=0.2)
             else:
-                self.styles.animate("offset", (0, 0), duration=0.2)
+                self.styles.animate("offset", Coordinate(0, 0), duration=0.2)
             self.styles.animate("background", "black", duration=0.2)
             self.styles.animate("color", "green", duration=0.2)
             self.label.update(self.base_text)
