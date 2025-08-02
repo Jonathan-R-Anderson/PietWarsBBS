@@ -103,6 +103,12 @@ class BBSApp(App):
     """Textual BBS application with a fancy telnet menu."""
 
     CSS_PATH = "bbs_styles.css"
+    BINDINGS = [
+        ("up", "cursor_up", "Up"),
+        ("down", "cursor_down", "Down"),
+        ("enter", "select", "Select"),
+        ("q", "quit", "Quit"),
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

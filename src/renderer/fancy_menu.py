@@ -67,11 +67,10 @@ class FancyListView(ListView):
 
     def on_mount(self) -> None:
         self.current: FancyMenuItem | None = None
-        if self.children:
-            first = self.children[0]
-            if isinstance(first, FancyMenuItem):
-                first.set_highlighted(True)
-                self.current = first
+        first = self.query(FancyMenuItem).first()
+        if first:
+            first.set_highlighted(True)
+            self.current = first
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         if self.current and isinstance(self.current, FancyMenuItem):
