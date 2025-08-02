@@ -54,25 +54,13 @@ class GameMenuScreen(Screen):
             await self.app.pop_screen()
 
 
-class BBSApp(App):
-    """Simple anonymous-style BBS interface with a menu."""
+class MainMenuScreen(Screen):
+    """Primary BBS menu shown to telnet users."""
 
-    CSS_PATH = "bbs_styles.css"
-    BINDINGS = [("q", "quit", "Quit")]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.background_music = os.getenv("BACKGROUND_MUSIC")
-        self.select_sound = os.getenv("MENU_SELECT_SOUND")
-        self.scroll_sound = os.getenv("MENU_SCROLL_SOUND")
-        self.wallpaper = os.getenv("ANSI_WALLPAPER", "ansi")
-
-    def on_mount(self) -> None:
-        if self.background_music:
-            audio.play_background(self.background_music)
+    BINDINGS = [("q", "app.quit", "Quit")]
 
     def compose(self) -> ComposeResult:
-        yield ANSIWallpaper(self.wallpaper, id="wallpaper")
+        yield ANSIWallpaper(self.app.wallpaper, id="wallpaper")
         yield Header("Evil BBS")
         with Horizontal(id="main_layout"):
             with Container(id="menu_panel"):
@@ -88,25 +76,45 @@ class BBSApp(App):
                     FancyMenuItem("Your Account"),
                     FancyMenuItem("Your Statistics"),
                 )
-            self.content = Static("Welcome to Evil BBS! Select a menu option.", id="content")
+            self.content = Static(
+                "Welcome to Evil BBS! Select a menu option.", id="content"
+            )
             yield self.content
         yield Footer()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
         """Handle selections from the main menu."""
-        # ``Label`` widgets no longer have a ``text`` attribute in modern
-        # Textual, so use the ``FancyMenuItem``'s ``base_text`` fallback.
-        label = getattr(event.item, "base_text", event.item.query_one(Label).renderable.plain)
-        if self.select_sound:
-            audio.play_sound(self.select_sound)
+        label = getattr(
+            event.item, "base_text", event.item.query_one(Label).renderable.plain
+        )
+        if self.app.select_sound:
+            audio.play_sound(self.app.select_sound)
         if label == "Games":
-            await self.push_screen(GameMenuScreen())
+            await self.app.push_screen(GameMenuScreen())
         else:
             self.content.update(f"You opened {label}")
 
     async def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
-        if self.scroll_sound:
-            audio.play_sound(self.scroll_sound)
+        if self.app.scroll_sound:
+            audio.play_sound(self.app.scroll_sound)
+
+
+class BBSApp(App):
+    """Textual BBS application with a fancy telnet menu."""
+
+    CSS_PATH = "bbs_styles.css"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.background_music = os.getenv("BACKGROUND_MUSIC")
+        self.select_sound = os.getenv("MENU_SELECT_SOUND")
+        self.scroll_sound = os.getenv("MENU_SCROLL_SOUND")
+        self.wallpaper = os.getenv("ANSI_WALLPAPER", "ansi")
+
+    def on_mount(self) -> None:
+        if self.background_music:
+            audio.play_background(self.background_music)
+        self.push_screen(MainMenuScreen())
 
 
 if __name__ == "__main__":
