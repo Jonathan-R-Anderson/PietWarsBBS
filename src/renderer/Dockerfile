@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     py3-pip \
     build-base \
     python3-dev \
+    vlc \
     && rm -rf /var/cache/apk/*
 
 # Install Python dependencies

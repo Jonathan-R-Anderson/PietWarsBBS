@@ -3,3 +3,4 @@ textual==0.44.0
 aiohttp
 thefuzz
 telnetlib3
+Pillow

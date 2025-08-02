@@ -53,23 +53,31 @@ class BBSApp(App):
         super().__init__(*args, **kwargs)
         self.background_music = os.getenv("BACKGROUND_MUSIC")
         self.select_sound = os.getenv("MENU_SELECT_SOUND")
-        self.wallpaper_dir = os.getenv("ANSI_WALLPAPER_DIR", "ansi")
+        self.scroll_sound = os.getenv("MENU_SCROLL_SOUND")
+        self.wallpaper = os.getenv("ANSI_WALLPAPER", "ansi")
 
     def on_mount(self) -> None:
         if self.background_music:
             audio.play_background(self.background_music)
 
     def compose(self) -> ComposeResult:
-        yield ANSIWallpaper(self.wallpaper_dir, id="wallpaper")
-        yield Header("PietChan BBS")
+        yield ANSIWallpaper(self.wallpaper, id="wallpaper")
+        yield Header("Evil BBS")
         with Horizontal(id="main_layout"):
             with Container(id="menu_panel"):
                 yield FancyListView(
-                    FancyMenuItem("/p/ Programming"),
-                    FancyMenuItem("/g/ Games"),
-                    FancyMenuItem("Quit"),
+                    FancyMenuItem("ANSI Gallery"),
+                    FancyMenuItem("Channels"),
+                    FancyMenuItem("File Menu"),
+                    FancyMenuItem("Games"),
+                    FancyMenuItem("Mail"),
+                    FancyMenuItem("Node Chat (IRC)"),
+                    FancyMenuItem("System News"),
+                    FancyMenuItem("Who's On"),
+                    FancyMenuItem("Your Account"),
+                    FancyMenuItem("Your Statistics"),
                 )
-            self.content = Static("Welcome to PietChan! Select a board from the menu.", id="content")
+            self.content = Static("Welcome to Evil BBS! Select a menu option.", id="content")
             yield self.content
         yield Footer()
 
@@ -77,12 +85,14 @@ class BBSApp(App):
         label = event.item.query_one(Label).text
         if self.select_sound:
             audio.play_sound(self.select_sound)
-        if label.endswith("Games"):
+        if label == "Games":
             await self.push_screen(GameMenuScreen())
-        elif label == "Quit":
-            await self.action_quit()
         else:
             self.content.update(f"You opened {label}")
+
+    async def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
+        if self.scroll_sound:
+            audio.play_sound(self.scroll_sound)
 
 
 if __name__ == "__main__":
