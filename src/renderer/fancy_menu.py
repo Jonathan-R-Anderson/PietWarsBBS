@@ -35,7 +35,10 @@ class FancyMenuItem(ListItem):
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 2, duration=0.2)
             else:  # Textual >= 0.5
-                self.styles.animate("offset", Coordinate(2, 0), duration=0.2)
+                try:
+                    self.styles.animate("offset", Coordinate(2, 0), duration=0.2)
+                except AssertionError:  # pragma: no cover - fallback for old Textual
+                    self.styles.offset = Coordinate(2, 0)
             self.styles.animate("background", "green", duration=0.2)
             self.styles.animate("color", "black", duration=0.2)
             self.label.update(f"> {self.base_text}")
@@ -43,7 +46,10 @@ class FancyMenuItem(ListItem):
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 0, duration=0.2)
             else:
-                self.styles.animate("offset", Coordinate(0, 0), duration=0.2)
+                try:
+                    self.styles.animate("offset", Coordinate(0, 0), duration=0.2)
+                except AssertionError:  # pragma: no cover - fallback for old Textual
+                    self.styles.offset = Coordinate(0, 0)
             self.styles.animate("background", "black", duration=0.2)
             self.styles.animate("color", "green", duration=0.2)
             self.label.update(self.base_text)
