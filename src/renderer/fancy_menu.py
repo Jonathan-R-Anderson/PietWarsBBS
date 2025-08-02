@@ -21,14 +21,16 @@ class FancyMenuItem(ListItem):
 
     def watch_highlighted(self, highlighted: bool) -> None:
         if highlighted:
-            # Offset is a tuple of ``(x, y)`` values in Textual 5+.
-            # ``offset_x`` was removed, so we animate ``offset`` instead.
-            self.styles.animate("offset", (2, 0), duration=0.2)
+            # Support Textual versions prior to 0.5 where ``offset`` was split
+            # into ``offset_x`` and ``offset_y``. Animating ``offset`` with a
+            # tuple causes an AnimationError on those versions, so we animate
+            # ``offset_x`` directly instead of the tuple.
+            self.styles.animate("offset_x", 2, duration=0.2)
             self.styles.animate("background", "green", duration=0.2)
             self.styles.animate("color", "black", duration=0.2)
             self.label.update(f"> {self.base_text}")
         else:
-            self.styles.animate("offset", (0, 0), duration=0.2)
+            self.styles.animate("offset_x", 0, duration=0.2)
             self.styles.animate("background", "black", duration=0.2)
             self.styles.animate("color", "green", duration=0.2)
             self.label.update(self.base_text)
