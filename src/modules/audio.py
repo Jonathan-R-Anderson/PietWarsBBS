@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import shlex
 import shutil
 import subprocess
 import sys
@@ -27,6 +25,7 @@ def play_sound(path: str) -> None:
 
     # Try platform players
     players = [
+        ["cvlc", "--play-and-exit"],
         ["ffplay", "-nodisp", "-autoexit"],
         ["aplay"],
         ["afplay"],
