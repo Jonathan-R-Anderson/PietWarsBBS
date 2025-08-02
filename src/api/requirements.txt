@@ -5,6 +5,5 @@ pillow
 termgl
 flask
 requests
-pillow
 numpy
-textual
+textual==0.44.0
