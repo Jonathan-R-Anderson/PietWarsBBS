@@ -1,21 +1,29 @@
-import logging
 import hashlib
-import socks
-import socket
-import stem.process
-import stem.socket
-import threading
-import config
 import json
 import random
+import socket
 import string
+import sys
+import threading
+from pathlib import Path
 
+import socks
+import stem.process
+import stem.socket
 
-logging.basicConfig(filename='/debug/piet_wars.log', level=logging.INFO)  # Change the filename as needed
+import config
+
+SRC_ROOT = Path(__file__).resolve().parent.parent
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from logging_config import setup_logging
+
+logger = setup_logging(__name__)
 
 class KademliaNode:
     def __init__(self, node_id, address, port):
-        logging.info("Initializing KademliaNode.")
+        logger.info("Initializing KademliaNode.")
         self.node_id = node_id
         self.address = address
         self.port = int(port)  # Added port attribute
@@ -40,29 +48,29 @@ class KademliaNode:
 
 class KademliaDHT:
     def __init__(self):
-        logging.info("Initializing KademliaDHT.")
+        logger.info("Initializing KademliaDHT.")
         self.local_onion_address = None
         self.local_port = None
         self.local_node = None
         self.nodes = None
         self.routing_table = [[] for _ in range(160)]  # Initialize routing table with empty buckets
-        logging.info("KademliaDHT initialized.")
+        logger.info("KademliaDHT initialized.")
 
     def initialize_node(self):
-        logging.info("Initializing local node.")
+        logger.info("Initializing local node.")
         if (self.local_onion_address is not None and 
             self.local_port is not None):
             self.local_node = KademliaNode(self._get_node_id(self.local_onion_address), self.local_onion_address, self.local_port)
             self.nodes = {self.local_node.node_id: self.local_node}  # Store local node as the root node
             self.routing_table[self._get_bucket_index(self.local_node.node_id)].append(self.local_node)  # Add local node to appropriate bucket
-            logging.info("Local node initialized.")
+            logger.info("Local node initialized.")
 
     def set_local_onion_address(self, local_onion_address):
-        logging.info("Setting local onion address.")
+        logger.info("Setting local onion address.")
         self.local_onion_address = local_onion_address
 
     def set_local_port(self, local_port):
-        logging.info("Setting local port.")
+        logger.info("Setting local port.")
         self.local_port = local_port
 
     def _get_bucket_index(self, node_id):
@@ -79,14 +87,14 @@ class KademliaDHT:
         return closest_nodes
 
     def store(self, key, value):
-        logging.info("Storing key-value pair.")
+        logger.info("Storing key-value pair.")
         node_id = self._get_node_id(key)
         closest_nodes = self.find_closest_nodes(node_id, K)
         for node in closest_nodes:
             node.data_store[key] = value
 
     def retrieve(self, key):
-        logging.info("Retrieving value for key.")
+        logger.info("Retrieving value for key.")
         node_id = self._get_node_id(key)
         closest_nodes = self.find_closest_nodes(node_id, K)
         for node in closest_nodes:
@@ -95,7 +103,7 @@ class KademliaDHT:
         return None
 
     def list_players(self):
-        logging.info("Listing all players in the DHT.")
+        logger.info("Listing all players in the DHT.")
 
         # Initialize an empty list to store all players
         all_players = []
@@ -110,27 +118,27 @@ class KademliaDHT:
         return all_players
 
     def _get_node_id(self, onion_address):
-        logging.info("Calculating node ID from onion address.")
+        logger.info("Calculating node ID from onion address.")
         return hashlib.sha1(onion_address.encode()).hexdigest()
     
     def send_payload(self, peer_hidden_address, peer_port, payload):
-        logging.info(f"Attempting to send {payload}")
-        logging.info("Setting up SOCKS proxy")
+        logger.info(f"Attempting to send {payload}")
+        logger.info("Setting up SOCKS proxy")
         socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, "127.0.0.1", 9050, True)
 
-        logging.info("Setting socket to SOCKS")
+        logger.info("Setting socket to SOCKS")
         socket.socket = socks.socksocket
 
-        logging.info("Creating socket")
+        logger.info("Creating socket")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        logging.info(f"Connecting to {peer_hidden_address}:{peer_port} type {type(peer_port)}")
+        logger.info(f"Connecting to {peer_hidden_address}:{peer_port} type {type(peer_port)}")
         s.connect((peer_hidden_address, peer_port))
 
-        logging.info(f"Sending payload {payload}")
+        logger.info(f"Sending payload {payload}")
         s.sendall(payload)
 
-        logging.info("Payload sent successfully")
+        logger.info("Payload sent successfully")
         return s
     
     def _perform_handshake(self, peer_hidden_address, peer_port):
@@ -156,7 +164,7 @@ class KademliaDHT:
                 # Return the socket
                 return s
         except Exception as e:
-            logging.error(f"Handshake with peer failed. Error: {e}")
+            logger.error(f"Handshake with peer failed. Error: {e}")
             return None
 
     def _request_peer_list(self, bootstrap_node_hidden_address, bootstrap_node_port):
@@ -184,7 +192,7 @@ class KademliaDHT:
             else:
                 return []
         except Exception as e:
-            logging.error(f"Failed to request peer list from node. Error: {e}")
+            logger.error(f"Failed to request peer list from node. Error: {e}")
             return []
         
     def join_network(self, known_node_address, known_node_port):
@@ -201,38 +209,38 @@ class KademliaDHT:
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server_socket.bind(('0.0.0.0', port))
             server_socket.listen(5)
-            logging.info("Server is listening on {}:{}".format('0.0.0.0', port))
+            logger.info("Server is listening on {}:{}".format('0.0.0.0', port))
 
             while True:
                 client_socket, address = server_socket.accept()
                 threading.Thread(target=self.handle_received_data, args=(client_socket,)).start()
         
         except Exception as e:
-            logging.error(f"Error in launch_dns_all_interfaces: {e}")
+            logger.error(f"Error in launch_dns_all_interfaces: {e}")
 
     def launch_onion_server(self, port,stdscr):
         try:
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server_socket.bind(('127.0.0.1', port))
             server_socket.listen(5)
-            logging.info("Server is listening on {}:{}".format('127.0.0.1', port))
+            logger.info("Server is listening on {}:{}".format('127.0.0.1', port))
 
             while True:
                 client_socket, address = server_socket.accept()
                 threading.Thread(target=self.handle_received_data, args=(client_socket,)).start()
 
         except Exception as e:
-            logging.error(f"Error in launch_dns_local_interface: {e}")
+            logger.error(f"Error in launch_dns_local_interface: {e}")
 
     def is_game_configured(self):
         chosen_game = config.PLAYERS[config.CHOSEN_GAME]
         return chosen_game.get("time_limit") and chosen_game.get("max_players") and chosen_game.get("flag") and chosen_game.get("player_color")
 
     def set_session_info(self, sender_address, sender_port):
-        logging.info("Received request for game session info")
+        logger.info("Received request for game session info")
         if config.CHOSEN_GAME is not None and config.CHOSEN_GAME < len(config.PLAYERS):
             game = config.PLAYERS[config.CHOSEN_GAME]
-            logging.info(f"GAME, {game}, {type(game)}")
+            logger.info(f"GAME, {game}, {type(game)}")
             configs = game.get("configs", "")
             players = game.get("players", "")
             session_info = {"type": "SETSESSIONINFO", "address": game["address"], "port": game["port"], "value": {"configs":configs, "players":players}}
@@ -240,11 +248,11 @@ class KademliaDHT:
             session_query = f"BEGIN{session_json}END".encode()
             self.send_payload(sender_address, sender_port, session_query)
         else:
-            logging.warning("No chosen game or invalid game index")
+            logger.warning("No chosen game or invalid game index")
 
     def get_session_info(self, sender_address, sender_port, parsed_data):
         parsed_data["type"] = "game_invitation"
-        logging.info(f"Possibly saving parsed data to config.PLAYERS {parsed_data}")
+        logger.info(f"Possibly saving parsed data to config.PLAYERS {parsed_data}")
         if (parsed_data not in config.PLAYERS):
             config.PLAYERS.append(parsed_data)
         session_info = {"type": "GETSESSIONINFO", "address": self.local_onion_address, "port": self.local_port}
@@ -275,7 +283,7 @@ class KademliaDHT:
 
 
     def set_client_wait_for_game(self, sender_address, sender_port):
-        logging.info("Received acceptance of game invitation")
+        logger.info("Received acceptance of game invitation")
         # Store the new player's information in the 'players' dictionary
         config.CHOSEN_GAME = 0    
         session_info = {"type": "WAITINGFORGAME",
@@ -283,9 +291,9 @@ class KademliaDHT:
                         "port": self.local_node.port}
         session_info = json.dumps(session_info)
         session_info = f"BEGIN{session_info}END".encode()
-        logging.info(f"Created session info: {session_info}")
+        logger.info(f"Created session info: {session_info}")
         self.send_payload(sender_address, sender_port, session_info)
-        logging.info("Sent payload to player")
+        logger.info("Sent payload to player")
 
     def get_board_status(self, target_address, target_port):
         board_info = {"type": "GETBOARDSTATUS",
@@ -295,31 +303,31 @@ class KademliaDHT:
                 }
         board_info = json.dumps(board_info)
         board_info = f"BEGIN{board_info}END".encode()
-        logging.info(f"Created session info: {board_info}")
+        logger.info(f"Created session info: {board_info}")
         self.send_payload(target_address, target_port, board_info)
-        logging.info("Sent payload to player")     
+        logger.info("Sent payload to player")     
 
 
     def update_board(self, target_address, target_port, parsed_data):
-        logging.info(f"RECEIVED BOARD UPDATE {parsed_data}")
+        logger.info(f"RECEIVED BOARD UPDATE {parsed_data}")
 
     def set_host_wait_for_game(self, sender_address, parsed_data):
         config.GAME_STATUS = 0
-        logging.info(f"Attempting to add parsed data to players: {config.PLAYERS[config.CHOSEN_GAME]} at chosen game: {config.CHOSEN_GAME}")
+        logger.info(f"Attempting to add parsed data to players: {config.PLAYERS[config.CHOSEN_GAME]} at chosen game: {config.CHOSEN_GAME}")
         if not config.PLAYERS[config.CHOSEN_GAME].get("players"):
             config.PLAYERS[config.CHOSEN_GAME]["players"] = {sender_address : {}}
             config.PLAYERS[config.CHOSEN_GAME]["players"][sender_address] = parsed_data
         else:
             config.PLAYERS[config.CHOSEN_GAME]["players"][sender_address] = parsed_data
-        logging.info("Setting computer into wait mode")
-        logging.info(f"Players so far: {config.PLAYERS[config.CHOSEN_GAME]}")
+        logger.info("Setting computer into wait mode")
+        logger.info(f"Players so far: {config.PLAYERS[config.CHOSEN_GAME]}")
 
     def set_host_start_game(self):
         config.GAME_STATUS = 1
-        logging.info("Setting game status as starting")
+        logger.info("Setting game status as starting")
 
     def get_bootstrap_nodes(self, client_socket):
-        logging.info("Received list_bootstrap")
+        logger.info("Received list_bootstrap")
         # Get the list of peers
         peers = [str(p) for p in config.DHT.list_players()]
 
@@ -327,25 +335,25 @@ class KademliaDHT:
         peer_list_json = json.dumps({"peers": peers})
 
         response = f"BEGIN{peer_list_json}END"
-        logging.info(f"Sending {response}")
+        logger.info(f"Sending {response}")
 
         # Send the JSON response back to the client
         client_socket.sendall(response.encode())  
 
     def handle_received_data(self, client_socket):
-        logging.info("Starting to handle received data")
+        logger.info("Starting to handle received data")
         data = b""
         while not data.endswith(b"END"):
             data += client_socket.recv(1)
         data = data.decode()
         try:
             parsed_data = json.loads(data.strip("BEGIN").strip("END"))
-            logging.info(f"Parsing received data: {parsed_data}")
+            logger.info(f"Parsing received data: {parsed_data}")
             data_type = parsed_data.get("type")
             sender_address = parsed_data.get("address")
             sender_port = parsed_data.get("port")
             if sender_address is not None and sender_port is not None:
-                logging.info("Peer information found, creating Kademlia node")
+                logger.info("Peer information found, creating Kademlia node")
                 peer = KademliaNode(self._get_node_id(sender_address), sender_address, sender_port)
                 self._add_to_routing_table(peer)
                 if data_type == "game_invitation":
@@ -367,7 +375,7 @@ class KademliaDHT:
                     self.set_host_start_game()
                     
                 elif data_type == "DeclineInvite":
-                    logging.info("Received decline of game invitation")
+                    logger.info("Received decline of game invitation")
                     # Do nothing
 
                 elif data_type == "list_bootstrap":
@@ -380,11 +388,11 @@ class KademliaDHT:
                     self.get_board_status(self, sender_address, sender_port)
 
                 else:
-                    logging.info(f"Received unknown command {parsed_data}")
+                    logger.info(f"Received unknown command {parsed_data}")
             else:
-                logging.warning(f"Received status data for unknown player: {sender_address}")
+                logger.warning(f"Received status data for unknown player: {sender_address}")
         except json.JSONDecodeError as e:
-            logging.error(f"{data}: JSON decoding error - {str(e)}")
+            logger.error(f"{data}: JSON decoding error - {str(e)}")
 
 
 
@@ -396,7 +404,7 @@ class KademliaDHT:
                 peer = peer.split(":")
                 peer_address = peer[0]
                 peer_port = peer[1]
-                logging.info(f"Adding peer {peer}")
+                logger.info(f"Adding peer {peer}")
                 peer = KademliaNode(self._get_node_id(peer_address), peer_address, peer_port)
                 self._add_to_routing_table(peer)
         else:
@@ -407,7 +415,7 @@ class KademliaDHT:
                 peer = peer.split(":")
                 peer_address = peer[0]
                 peer_port = peer[1]
-                logging.info(f"Adding peer {peer}")
+                logger.info(f"Adding peer {peer}")
                 peer = KademliaNode(self._get_node_id(peer_address), peer_address, peer_port)
                 self._add_to_routing_table(peer)
                 
@@ -421,12 +429,12 @@ class KademliaDHT:
 
             # Create a socket to connect to the peer's Tor hidden service
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                logging.info(f"Connecting to {bootstrap_address}:{bootstrap_port}")
+                logger.info(f"Connecting to {bootstrap_address}:{bootstrap_port}")
 
                 # Connect to the peer's Tor hidden service
                 s.connect((bootstrap_address, bootstrap_port))
                 
-                logging.info("Connected successfully")
+                logger.info("Connected successfully")
 
                 # Send the handshake request
                 handshake_request = {"type": "list_bootstrap", 
@@ -435,16 +443,16 @@ class KademliaDHT:
                 payload = f"BEGIN{json.dumps(handshake_request)}END".encode()   
                 s.sendall(payload)
 
-                logging.info("Payload sent successfully")
+                logger.info("Payload sent successfully")
 
                 # Receive and parse the peer list response
                 data = b""
                 while not data.endswith(b"END"):
                     listener = s.recv(1)
                     data += listener
-                    logging.info(f"received partial {data}")
+                    logger.info(f"received partial {data}")
 
-                logging.info(f"Received data: {data}")
+                logger.info(f"Received data: {data}")
                 
                 # Decode the response and extract peer list
                 data_str = data.decode().strip("BEGIN").strip("END")
@@ -452,11 +460,11 @@ class KademliaDHT:
                 peer_list = peer_data.get("peers", [])
 
                 # Log the received peer list
-                logging.info(f"Received peer list: {peer_list}")
+                logger.info(f"Received peer list: {peer_list}")
 
         except Exception as e:
             # Log any errors that occur during the connection attempt
-            logging.error(f"Error connecting to bootstrap server: {e}")
+            logger.error(f"Error connecting to bootstrap server: {e}")
 
         return peer_list
 
@@ -501,7 +509,7 @@ class KademliaDHT:
         return chunks, chunk_id_list
 
     def store_file(self, file_name, file_data):
-        logging.info("Storing file in the DHT.")
+        logger.info("Storing file in the DHT.")
 
         # Step 1: Split the file into chunks
         chunks, chunk_id_list = self._split_file_into_chunks(file_data)
@@ -521,16 +529,16 @@ class KademliaDHT:
             chunk_hash = self._hash_chunk(chunk_data)
             self.store(chunk_id, {"data": chunk_data, "hash": chunk_hash})
 
-        logging.info("File stored successfully.")
+        logger.info("File stored successfully.")
 
     def retrieve_file(self, file_name):
-        logging.info("Retrieving file from the DHT.")
+        logger.info("Retrieving file from the DHT.")
 
         # Step 1: Retrieve metadata about the file from the DHT
         file_metadata = self.retrieve(file_name)
 
         if not file_metadata:
-            logging.error("File not found in the DHT.")
+            logger.error("File not found in the DHT.")
             return None
 
         # Step 2: Retrieve each chunk of the file from the DHT
@@ -540,10 +548,10 @@ class KademliaDHT:
             if chunk_data:
                 chunks.append(chunk_data["data"])
             else:
-                logging.error(f"Chunk {chunk_id} not found in the DHT.")
+                logger.error(f"Chunk {chunk_id} not found in the DHT.")
 
         # Step 3: Reconstruct the file from the chunks
         file_data = b"".join(chunks)
 
-        logging.info("File retrieved successfully.")
+        logger.info("File retrieved successfully.")
         return file_data

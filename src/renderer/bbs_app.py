@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
+import os
 import subprocess
 import sys
-import os
+from pathlib import Path
+
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Label, ListView
 try:
@@ -11,8 +14,14 @@ try:
 except ImportError:  # pragma: no cover - fallback for running as script
     # Fallback when the module is executed directly without package context
     from fancy_menu import FancyListView, FancyMenuItem
-from textual.containers import Horizontal, Container
+from textual.containers import Container, Horizontal
 from textual.screen import Screen
+
+SRC_ROOT = Path(__file__).resolve().parent.parent
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from logging_config import setup_logging
 
 try:
     # Use relative imports when executed as part of the ``src`` package layout
@@ -24,12 +33,16 @@ except ImportError:  # pragma: no cover - fallback for running as script
     from modules import audio
 
 
+logger = setup_logging(__name__)
+
+
 class GameMenuScreen(Screen):
     """Sub-menu for launching games."""
 
     BINDINGS = [("q", "pop_screen", "Back")]
 
     def compose(self) -> ComposeResult:
+        logger.debug("Composing GameMenuScreen")
         yield Header("Game Selection")
         with Container():
             yield FancyListView(
@@ -47,6 +60,7 @@ class GameMenuScreen(Screen):
         label = getattr(event.item, "base_text", event.item.query_one(Label).renderable.plain)
         if self.app.select_sound:
             audio.play_sound(self.app.select_sound)
+        logger.debug("Game menu item selected: %s", label)
         if label == "PietWars":
             await self.app.shutdown()
             subprocess.run([sys.executable, "-m", "src.renderer.render_game"])
@@ -60,6 +74,7 @@ class MainMenuScreen(Screen):
     BINDINGS = [("q", "app.quit", "Quit")]
 
     def compose(self) -> ComposeResult:
+        logger.debug("Composing MainMenuScreen")
         yield ANSIWallpaper(self.app.wallpaper, id="wallpaper")
         yield Header("Evil BBS")
         with Horizontal(id="main_layout"):
@@ -89,6 +104,7 @@ class MainMenuScreen(Screen):
         )
         if self.app.select_sound:
             audio.play_sound(self.app.select_sound)
+        logger.debug("Main menu item selected: %s", label)
         if label == "Games":
             await self.app.push_screen(GameMenuScreen())
         else:
@@ -97,6 +113,7 @@ class MainMenuScreen(Screen):
     async def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:  # type: ignore[override]
         if self.app.scroll_sound:
             audio.play_sound(self.app.scroll_sound)
+        logger.debug("Highlight changed to: %s", getattr(event.item, 'base_text', None))
 
 
 class BBSApp(App):
@@ -118,6 +135,7 @@ class BBSApp(App):
         self.wallpaper = os.getenv("ANSI_WALLPAPER", "ansi")
 
     def on_mount(self) -> None:
+        logger.debug("Mounting BBSApp")
         if self.background_music:
             audio.play_background(self.background_music)
         self.push_screen(MainMenuScreen())
