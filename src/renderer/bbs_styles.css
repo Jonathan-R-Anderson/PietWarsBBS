@@ -33,7 +33,10 @@ Screen {
 }
 
 FancyListView {
+    height: auto;
     width: 100%;
+    background: black;
+    border: round green;
 }
 
 FancyMenuItem {
