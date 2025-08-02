@@ -14,8 +14,14 @@ except ImportError:  # pragma: no cover - fallback for running as script
 from textual.containers import Horizontal, Container
 from textual.screen import Screen
 
-from modules.ansi import ANSIWallpaper
-from modules import audio
+try:
+    # Use relative imports when executed as part of the ``src`` package layout
+    from ..modules.ansi import ANSIWallpaper
+    from ..modules import audio
+except ImportError:  # pragma: no cover - fallback for running as script
+    # Allow running the module directly without package context
+    from modules.ansi import ANSIWallpaper
+    from modules import audio
 
 
 class GameMenuScreen(Screen):
