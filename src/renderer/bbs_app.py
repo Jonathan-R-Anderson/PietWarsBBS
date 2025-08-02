@@ -33,7 +33,12 @@ class GameMenuScreen(Screen):
         yield Footer()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
-        label = event.item.query_one(Label).text
+        """Handle selections from the game submenu."""
+        # ``Label`` widgets in recent Textual versions no longer expose a
+        # ``text`` attribute.  ``FancyMenuItem`` stores the original label text
+        # on ``base_text`` so we can reliably retrieve the selection regardless
+        # of how the underlying widget represents its contents.
+        label = getattr(event.item, "base_text", event.item.query_one(Label).renderable.plain)
         if self.app.select_sound:
             audio.play_sound(self.app.select_sound)
         if label == "PietWars":
@@ -82,7 +87,10 @@ class BBSApp(App):
         yield Footer()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:  # type: ignore[override]
-        label = event.item.query_one(Label).text
+        """Handle selections from the main menu."""
+        # ``Label`` widgets no longer have a ``text`` attribute in modern
+        # Textual, so use the ``FancyMenuItem``'s ``base_text`` fallback.
+        label = getattr(event.item, "base_text", event.item.query_one(Label).renderable.plain)
         if self.select_sound:
             audio.play_sound(self.select_sound)
         if label == "Games":
