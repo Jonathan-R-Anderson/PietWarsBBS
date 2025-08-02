@@ -8,6 +8,7 @@ try:
 except ImportError:  # pragma: no cover - fall back for older Textual versions
     # ``Coordinate`` was renamed to ``Offset`` in Textual >= 0.5
     from textual.geometry import Offset as Coordinate
+from textual.css.scalar import ScalarOffset
 
 
 class FancyMenuItem(ListItem):
@@ -31,10 +32,14 @@ class FancyMenuItem(ListItem):
             # into ``offset_x`` and ``offset_y``. Animating ``offset`` with a
             # tuple causes an AnimationError on those versions, so we animate
             # ``offset_x`` directly instead of the tuple. Newer versions use
-            # ``offset`` which expects a Coordinate tuple.
+            # ``offset`` which expects a Coordinate tuple. Extremely old
+            # versions expose ``offset`` as ``ScalarOffset`` which can't be
+            # animated, so we set the value directly to avoid runtime errors.
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 2, duration=0.2)
-            else:  # Textual >= 0.5
+            elif isinstance(self.styles.offset, ScalarOffset):
+                self.styles.offset = Coordinate(2, 0)
+            else:
                 try:
                     self.styles.animate("offset", Coordinate(2, 0), duration=0.2)
                 except AssertionError:  # pragma: no cover - fallback for old Textual
@@ -45,6 +50,8 @@ class FancyMenuItem(ListItem):
         else:
             if hasattr(self.styles, "offset_x"):
                 self.styles.animate("offset_x", 0, duration=0.2)
+            elif isinstance(self.styles.offset, ScalarOffset):
+                self.styles.offset = Coordinate(0, 0)
             else:
                 try:
                     self.styles.animate("offset", Coordinate(0, 0), duration=0.2)
