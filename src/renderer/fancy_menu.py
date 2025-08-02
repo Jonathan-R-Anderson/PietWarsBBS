@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from textual.widgets import ListView, ListItem, Label
 from textual.reactive import reactive
-from textual.geometry import Coordinate
+try:
+    # Newer versions of Textual expose ``Coordinate`` for the ``offset`` style
+    from textual.geometry import Coordinate
+except ImportError:  # pragma: no cover - fall back for older Textual versions
+    # ``Coordinate`` was renamed to ``Offset`` in Textual >= 0.5
+    from textual.geometry import Offset as Coordinate
 
 
 class FancyMenuItem(ListItem):
