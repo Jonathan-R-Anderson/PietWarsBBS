@@ -165,6 +165,24 @@ class PlayerDirectoryService:
             self._save_identity()
             self._upsert_local_record()
 
+    def set_identity(self, username: str, unique_seed: str) -> None:
+        """
+        Set runtime identity from login flow.
+        `unique_seed` is hashed before being used as network ID.
+        """
+        username = (username or "").strip()
+        unique_seed = (unique_seed or "").strip()
+        if not username:
+            username = "player"
+        if not unique_seed:
+            unique_seed = _rand_id()
+        with self._lock:
+            self.username = username
+            self.unique_id_seed = unique_seed
+            self.unique_id = _hash_unique_id(unique_seed)
+            self._save_identity()
+            self._upsert_local_record()
+
     def get_local_handle(self) -> str:
         return f"{self.username}#{self.unique_id}"
 

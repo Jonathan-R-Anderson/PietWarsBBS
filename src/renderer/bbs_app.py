@@ -8,12 +8,13 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
 import requests
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static, Label, ListView, Rule
+from textual.widgets import Header, Footer, Static, Label, ListView, Rule, Input, Button
 from textual.containers import Container, Horizontal, Vertical
 from textual import events
 try:
@@ -152,6 +153,66 @@ class TickerWidget(Static):
         self._offset = (self._offset + 1) % len(t)
 
 
+class LoginScreen(Screen):
+    """Login gate: username + ID seed (hashed into network ID)."""
+
+    BINDINGS = [("enter", "submit_login", "Login"), ("q", "app.quit", "Quit")]
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        with Container(id="game_info_panel"):
+            yield Static(
+                "[bold bright_cyan]Network Login[/]\n"
+                "[dim]Enter a username and secret ID seed[/dim]",
+                id="game_title",
+            )
+            yield Rule()
+            self.username_input = Input(placeholder="Username", id="login_username")
+            yield self.username_input
+            self.seed_input = Input(password=True, placeholder="ID seed (private)", id="login_seed")
+            yield self.seed_input
+            yield Button("Enter BBS", id="login_submit")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.username_input.focus()
+
+    def action_submit_login(self) -> None:
+        username = self.username_input.value.strip()
+        seed = self.seed_input.value.strip()
+        if not username or not seed:
+            self.app.notify("Username and ID seed are required", severity="error")
+            return
+        try:
+            svc = kademlia.get_service()
+            svc.set_identity(username, seed)
+        except Exception as exc:
+            self.app.notify(f"P2P login failed: {exc}", severity="error")
+            return
+
+        def _start_p2p() -> None:
+            try:
+                svc.start()
+                self.app.call_from_thread(
+                    self.app.notify,
+                    f"Logged in as {svc.get_local_handle()}",
+                    severity="information",
+                )
+            except Exception as exc:
+                self.app.call_from_thread(
+                    self.app.notify,
+                    f"P2P startup failed: {exc}",
+                    severity="error",
+                )
+
+        threading.Thread(target=_start_p2p, daemon=True).start()
+        self.app.push_screen(MainMenuScreen())
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "login_submit":
+            self.action_submit_login()
+
+
 class GameMenuScreen(Screen):
     """Sub-menu for game selection."""
 
@@ -200,10 +261,75 @@ class GameMenuScreen(Screen):
             self.app.pop_screen()
 
 
+class WhosOnScreen(Screen):
+    """Dedicated screen for active-user directory and direct invites."""
+
+    BINDINGS = [
+        ("q", "pop_screen", "Back"),
+        ("escape", "pop_screen", "Back"),
+        ("r", "refresh_directory", "Refresh"),
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.directory_handles: list[str] = []
+        self.content: Static | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Container(id="game_info_panel"):
+            self.content = Static("[dim]Loading directory...[/dim]", id="game_description")
+            yield self.content
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.refresh_directory()
+        self.set_interval(3.0, self.refresh_directory)
+
+    def action_refresh_directory(self) -> None:
+        self.refresh_directory()
+
+    def refresh_directory(self) -> None:
+        if not self.content:
+            return
+        try:
+            svc = kademlia.get_service()
+            me = svc.get_local_handle()
+            users = [u for u in svc.list_active_users() if u.get("handle") != me]
+            self.directory_handles = [u.get("handle", "") for u in users][:9]
+            lines = ["[bold bright_cyan]Who’s On[/bold bright_cyan]"]
+            lines.append(f"[dim]You are {me}[/dim]")
+            lines.append("")
+            if not self.directory_handles:
+                lines.append("[dim]No other active users discovered yet[/dim]")
+            else:
+                for i, handle in enumerate(self.directory_handles, start=1):
+                    lines.append(f"[yellow]{i}[/yellow]. [green]{handle}[/green]")
+                lines.append("")
+                lines.append("[dim]Press 1-9 to send direct invite[/dim]")
+            self.content.update("\n".join(lines))
+        except Exception:
+            self.directory_handles = []
+            self.content.update("[dim]Directory unavailable[/dim]")
+
+    async def on_key(self, event: events.Key) -> None:
+        if event.key.isdigit():
+            idx = int(event.key) - 1
+            if 0 <= idx < len(self.directory_handles):
+                handle = self.directory_handles[idx]
+                ok, msg = kademlia.get_service().invite_handle(handle)
+                self.app.notify(msg, severity="information" if ok else "error")
+                event.stop()
+
+
 class MainMenuScreen(Screen):
     """Primary BBS menu presented to telnet users."""
 
-    BINDINGS = [("q", "app.quit", "Quit")]
+    BINDINGS = [
+        ("enter", "select_current", "Select"),
+        ("w", "open_whos_on", "Who's On"),
+        ("q", "app.quit", "Quit"),
+    ]
 
     CONTENT_MAP = {
         "ANSI Gallery":    "[bold]ANSI Gallery[/]\n\nView retro ANSI artwork.",
@@ -220,7 +346,7 @@ class MainMenuScreen(Screen):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.directory_handles: list[str] = []
+        self._menu: FancyListView | None = None
 
     def compose(self) -> ComposeResult:
         logger.debug("Composing MainMenuScreen")
@@ -233,7 +359,7 @@ class MainMenuScreen(Screen):
         with Horizontal(id="main_layout"):
             with Vertical(id="menu_panel"):
                 yield Static("[bold bright_green]◈ MAIN MENU ◈[/]", id="menu_title")
-                yield FancyListView(
+                self._menu = FancyListView(
                     FancyMenuItem("ANSI Gallery"),
                     FancyMenuItem("Channels"),
                     FancyMenuItem("File Menu"),
@@ -245,6 +371,7 @@ class MainMenuScreen(Screen):
                     FancyMenuItem("Your Account"),
                     FancyMenuItem("Your Statistics"),
                 )
+                yield self._menu
 
             with Vertical(id="content_area"):
                 with Container(id="sysinfo_panel"):
@@ -272,47 +399,49 @@ class MainMenuScreen(Screen):
         )
         if self.app.select_sound:
             audio.play_sound(self.app.select_sound)
-        logger.debug("Main menu selected: %s", label)
-        if label == "Games":
-            await self.app.push_screen(GameMenuScreen())
-        elif label == "Who's On":
-            self._show_directory()
-        else:
-            body = self.CONTENT_MAP.get(label, f"[bold]{label}[/]\n\nComing soon.")
-            self.content.update(body + "\n\n[dim]Press a menu item to continue.[/]")
+        await self._handle_menu_selection(label)
 
-    def _show_directory(self) -> None:
-        try:
-            svc = kademlia.get_service()
-            me = svc.get_local_handle()
-            users = [u for u in svc.list_active_users() if u.get("handle") != me]
-            self.directory_handles = [u.get("handle", "") for u in users][:9]
-            lines = ["[bold bright_cyan]Active Users[/]"]
-            lines.append(f"[dim]You are {me}[/dim]")
-            lines.append("")
-            if not self.directory_handles:
-                lines.append("[dim]No other active users discovered yet[/dim]")
-            else:
-                for i, handle in enumerate(self.directory_handles, start=1):
-                    lines.append(f"[yellow]{i}[/yellow]. [green]{handle}[/green]")
-                lines.append("")
-                lines.append("[dim]Press 1-9 to send direct invite[/dim]")
-            self.content.update("\n".join(lines))
-        except Exception:
-            self.directory_handles = []
-            self.content.update("[dim]Directory unavailable[/dim]")
+    async def action_select_current(self) -> None:
+        """Fallback Enter handler for terminal/client combos that miss Selected events."""
+        if not self._menu:
+            return
+        item = getattr(self._menu, "current", None)
+        if item is None:
+            try:
+                idx = int(getattr(self._menu, "index", 0))
+                items = list(self._menu.query(FancyMenuItem))
+                if 0 <= idx < len(items):
+                    item = items[idx]
+            except Exception:
+                item = None
+        if not item:
+            return
+        label = getattr(item, "base_text", "")
+        if self.app.select_sound:
+            audio.play_sound(self.app.select_sound)
+        await self._handle_menu_selection(label)
+
+    async def action_open_whos_on(self) -> None:
+        await self.app.push_screen(WhosOnScreen())
+
+    async def _handle_menu_selection(self, label: str) -> None:
+        normalized = "".join(ch for ch in str(label).lower() if ch.isalnum() or ch.isspace()).strip()
+        logger.debug("Main menu selected: %s (normalized=%s)", label, normalized)
+        if normalized == "games":
+            await self.app.push_screen(GameMenuScreen())
+            return
+        if normalized in ("whos on", "who s on", "whose on", "whoon", "whoson"):
+            await self.app.push_screen(WhosOnScreen())
+            return
+        body = self.CONTENT_MAP.get(label, f"[bold]{label}[/]\n\nComing soon.")
+        self.content.update(body + "\n\n[dim]Press a menu item to continue.[/]")
 
     async def on_key(self, event: events.Key) -> None:
-        if not self.directory_handles:
-            return
         key = event.key
-        if key.isdigit():
-            idx = int(key) - 1
-            if 0 <= idx < len(self.directory_handles):
-                handle = self.directory_handles[idx]
-                ok, msg = kademlia.get_service().invite_handle(handle)
-                self.app.notify(msg, severity="information" if ok else "error")
-                event.stop()
+        if key in ("enter", "return", "ctrl+m"):
+            await self.action_select_current()
+            event.stop()
+            return
 
     async def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if self.app.scroll_sound:
@@ -326,9 +455,6 @@ class BBSApp(App):
     CSS_PATH = str(Path(__file__).resolve().parent / "bbs_styles.css")
 
     BINDINGS = [
-        ("up",    "cursor_up",   "Up"),
-        ("down",  "cursor_down", "Down"),
-        ("enter", "select",      "Select"),
         ("q",     "quit",        "Quit"),
     ]
 
@@ -342,13 +468,9 @@ class BBSApp(App):
 
     def on_mount(self) -> None:
         logger.debug("Mounting BBSApp")
-        try:
-            kademlia.start_service()
-        except Exception as exc:
-            logger.warning("P2P directory service did not start: %s", exc)
         if self.background_music:
             audio.play_background(self.background_music)
-        self.push_screen(MainMenuScreen())
+        self.push_screen(LoginScreen())
 
 
 if __name__ == "__main__":

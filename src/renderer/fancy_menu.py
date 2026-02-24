@@ -65,6 +65,12 @@ class FancyMenuItem(ListItem):
 class FancyListView(ListView):
     """List view that animates items when highlighted."""
 
+    BINDINGS = [
+        ("enter", "choose_current", "Choose"),
+        ("return", "choose_current", "Choose"),
+        ("ctrl+m", "choose_current", "Choose"),
+    ]
+
     def on_mount(self) -> None:
         self.current: FancyMenuItem | None = None
         first = self.query(FancyMenuItem).first()
@@ -78,3 +84,12 @@ class FancyListView(ListView):
         if event.item and isinstance(event.item, FancyMenuItem):
             event.item.set_highlighted(True)
             self.current = event.item
+
+    def action_choose_current(self) -> None:
+        """Emit a Selected message for the currently highlighted item."""
+        item = self.current
+        if item is None:
+            first = self.query(FancyMenuItem).first()
+            item = first
+        if item is not None:
+            self.post_message(ListView.Selected(self, item))
