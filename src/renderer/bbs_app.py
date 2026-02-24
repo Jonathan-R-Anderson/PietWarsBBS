@@ -137,31 +137,6 @@ class BattleStatusWidget(Static):
         self.update("[dim]Battle: unavailable[/dim]")
 
 
-class ActiveUsersWidget(Static):
-    """Shows active users discovered by the TCP/Tor directory service."""
-
-    def on_mount(self) -> None:
-        self._poll()
-        self.set_interval(3.0, self._poll)
-
-    def _poll(self) -> None:
-        try:
-            svc = kademlia.get_service()
-            me = svc.get_local_handle()
-            users = svc.list_active_users()[:8]
-            lines = [f"[bold bright_cyan]Directory[/] [dim]({len(users)} active)[/dim]"]
-            lines.append(f"[dim]You: {me}[/dim]")
-            for row in users:
-                handle = row.get("handle", "unknown")
-                marker = "•"
-                if handle == me:
-                    marker = "★"
-                lines.append(f"{marker} [green]{handle}[/green]")
-            self.update("\n".join(lines))
-        except Exception:
-            self.update("[dim]Directory unavailable[/dim]")
-
-
 class TickerWidget(Static):
     """Scrolling marquee at the bottom of the screen."""
 
@@ -278,8 +253,6 @@ class MainMenuScreen(Screen):
                     yield ApiStatusWidget(id="api_status")
                     yield Rule()
                     yield BattleStatusWidget(id="battle_status")
-                    yield Rule()
-                    yield ActiveUsersWidget(id="active_users")
 
                 self.content = Static(
                     "[bold bright_green]Welcome to EVIL BBS![/]\n\n"

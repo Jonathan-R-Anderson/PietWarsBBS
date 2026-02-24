@@ -7,6 +7,7 @@
 .github/copilot-instructions.md
 .windsurf/
 .roo/
+.env
 
 # Prompt/chat artifacts
 prompts/
@@ -15,4 +16,3 @@ prompt/
 *.prompts
 chat_history*
 llm_notes*
-
