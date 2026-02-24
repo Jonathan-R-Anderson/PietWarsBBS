@@ -17,6 +17,7 @@ class AppState:
     output_lock: threading.Lock = field(default_factory=threading.Lock)
     terminal_sizes: dict = field(default_factory=dict)
     previous_terminal_size: Tuple[Optional[int], Optional[int]] = (None, None)
+    battle_manager: Optional[object] = None
 
 
 state = AppState()

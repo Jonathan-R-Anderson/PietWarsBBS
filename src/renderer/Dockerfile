@@ -11,15 +11,19 @@ RUN apk add --no-cache \
     py3-pip \
     build-base \
     python3-dev \
+    zlib-dev \
+    tor \
     vlc \
     && rm -rf /var/cache/apk/*
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN python3 -m pip install --no-cache-dir --upgrade pip \
+    && pip3 install --no-cache-dir --prefer-binary -r requirements.txt
 
 # Copy application code
 COPY src/renderer/ .
 COPY src/modules/ ./modules
+COPY src/logging_config.py .
 
 EXPOSE 1337
 CMD ["python3", "telnet_server.py"]

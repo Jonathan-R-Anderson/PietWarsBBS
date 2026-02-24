@@ -1,9 +1,9 @@
 import sys
 import os
 from flask import request, jsonify
-from piet import PietInterpreter  # Import Piet logic
+from piet import PietInterpreter
 from PIL import Image
-import requests
+import requests as req_lib
 import numpy as np
 import threading
 import time
@@ -20,229 +20,151 @@ COLOR_MAPPING = {
     (255, 255, 255): "white",
     (0, 0, 0): "black",
 }
-# Shared state is managed in state.py
+
+
 def closest_color(rgb):
-    """Find the closest known color by computing Euclidean distance in RGB space."""
-    r, g, b = rgb  # Extract RGB values
+    r, g, b = rgb
     closest_name = None
     min_distance = float("inf")
-
     for (cr, cg, cb), color_name in COLOR_MAPPING.items():
-        distance = np.sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2)  # Euclidean distance
-
+        distance = np.sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2)
         if distance < min_distance:
             min_distance = distance
             closest_name = color_name
-
     return closest_name
 
 
 def validate_modification(board, x, y, new_color):
-    """
-    Validates whether a modification is legal by running the Piet interpreter.
-    
-    :param board: The current game board object
-    :param x: X coordinate of the modification
-    :param y: Y coordinate of the modification
-    :param new_color: New color to apply
-    :return: Boolean (True if valid, False if invalid)
-    """
-
-    #temp_board = [row[:] for row in board.board]  # Copy board
-
-    #temp_board[y][x] = new_color  # Apply change
-
-    #piet_interpreter = PietInterpreter(temp_board)
-    #piet_interpreter.run_step()  # Execute one step
-
-    #return piet_interpreter.is_valid(x, y)
-
     return True
 
-### 🔄 Modification Functions ###
 
 def modify_board(board, x, y, color):
-    """
-    Modifies the game board if the change is valid.
-    
-    :param board: The game board object
-    :param x: X coordinate
-    :param y: Y coordinate
-    :param color: New color
-    :return: Dictionary with success status and updated board state
-    """
-
     if validate_modification(board, x, y, color):
         success = board.set_color(x, y, color)
-        return {
-            "success": success,
-            "board": board.board,
-        }, 200 if success else 400
-    else:
-        return {"error": f"Invalid Piet instruction"}, 400
+        return {"success": success, "board": board.board}, 200 if success else 400
+    return {"error": "Invalid Piet instruction"}, 400
 
 
-### 🎮 API Routes ###
+def register_routes(app, board, battle_manager=None):
+    """Registers API routes for the game board and battle system."""
 
-def register_routes(app, board):
-    """Registers API routes for the game board."""
+    # ------------------------------------------------------------------ #
+    # Board / color routes                                                 #
+    # ------------------------------------------------------------------ #
 
     @app.route("/set_color", methods=["POST"])
     def set_color():
-        """
-        API: Modifies a color on the board if it is valid.
-        
-        Request JSON: { "x": <int>, "y": <int>, "color": "<color_name>" }
-        Response: { "success": <bool>, "board": [...], "colors": [...] }
-        """
         data = request.json
         x, y, color = data.get("x"), data.get("y"), data.get("color")
-
         if x is None or y is None or color is None:
             return jsonify({"error": "Missing x, y, or color"}), 400
-
-        return jsonify(*modify_board(board, x, y, color)), 200
+        result, status = modify_board(board, x, y, color)
+        if status == 200:
+            board.board_loaded = True
+        return jsonify(result), status
 
     @app.route("/clear_color", methods=["POST"])
     def clear_color():
-        """
-        API: Clears a color at a specific position.
-
-        Request JSON: { "x": <int>, "y": <int> }
-        Response: { "success": True, "board": [...], "colors": [...] }
-        """
         data = request.json
         x, y = data.get("x"), data.get("y")
-
         if x is None or y is None:
             return jsonify({"error": "Missing x or y"}), 400
-
         board.clear_color(x, y)
-        return jsonify({
-            "success": True,
-            "board": board.board,
-        }), 200
+        return jsonify({"success": True, "board": board.board}), 200
 
     @app.route("/get_board", methods=["GET"])
     def get_board():
-        """
-        API: Retrieves the board state.
+        return jsonify({"board": board.board, "revision": board.revision}), 200
 
-        Response: { "board": [...], "colors": [...] }
-        """
+    @app.route("/get_board_changes", methods=["GET"])
+    def get_board_changes():
+        try:
+            since = int(request.args.get("since", "-1"))
+        except ValueError:
+            return jsonify({"error": "Invalid since revision"}), 400
+
+        changes, too_old = board.get_changes_since(since)
+        if too_old or since < 0:
+            return jsonify({
+                "full": True,
+                "revision": board.revision,
+                "board": board.board,
+                "changes": [],
+            }), 200
+
         return jsonify({
-            "board": board.board, 
+            "full": False,
+            "revision": board.revision,
+            "changes": changes,
         }), 200
-    
+
     @app.route("/get_dimensions", methods=["GET"])
     def get_dimensions():
-        """
-        API: Retrieves the board dimensions.
-
-        Response: WxH
-        """
-        return jsonify({
-            "rows": board.height,
-            "cols": board.width 
-        }), 200
-    
+        return jsonify({"rows": board.height, "cols": board.width}), 200
 
     @app.route("/render", methods=["GET"])
     def render_board():
-        """
-        API: Returns an ANSI-rendered board.
-
-        Response: <pre>...</pre>
-        """
         return f"<pre>{board.render()}</pre>", 200
 
     @app.route("/set_terminal_size", methods=["POST"])
     def set_terminal_size():
-        """Receive and store the terminal dimensions from the client."""
         data = request.json
         rows = data.get("rows")
         cols = data.get("cols")
-
         if rows is None or cols is None:
             return jsonify({"error": "Missing terminal size parameters"}), 400
-
         if not isinstance(rows, int) or not isinstance(cols, int) or rows <= 0 or cols <= 0:
             return jsonify({"error": "Invalid terminal size values"}), 400
-
-        # Store the terminal size for the client's IP address
         client_ip = request.remote_addr
         state.terminal_sizes[client_ip] = {"rows": rows, "cols": cols}
-
         return jsonify({"message": "Terminal size updated", "rows": rows, "cols": cols}), 200
-
 
     @app.route("/get_terminal_size", methods=["GET"])
     def get_terminal_size():
-        """Return the stored terminal size for the requesting client."""
         client_ip = request.remote_addr
-        terminal_size = state.terminal_sizes.get(client_ip, {"rows": 100, "cols": 200})  # Default if not set
-
+        terminal_size = state.terminal_sizes.get(client_ip, {"rows": 100, "cols": 200})
         return jsonify(terminal_size)
-
-
 
     @app.route("/upload_image", methods=["POST"])
     def upload_image():
-        """Receives a PNG file, scales it to terminal size, and updates the board."""
-        DIMENSIONS_API_URL = "http://api:5000/set_dimensions"
-
         if "image" not in request.files:
             return jsonify({"error": "No image file provided"}), 400
 
-        # ✅ Fetch terminal size and ensure it's in JSON format
-        terminal_size_response = requests.get("http://api:5000/get_terminal_size")
-
+        terminal_size_response = req_lib.get("http://localhost:5000/get_terminal_size")
         if terminal_size_response.status_code != 200:
             return jsonify({"error": "Unable to fetch terminal size"}), 500
 
-        terminal_size = terminal_size_response.json()  # ✅ Extract JSON
+        terminal_size = terminal_size_response.json()
+        rows, cols = terminal_size.get("rows", 0), terminal_size.get("cols", 0)
 
-        rows, cols = terminal_size.get("rows", 0), terminal_size.get("cols", 0)  # Ensure valid defaults
-
-        # ✅ Prevent invalid dimensions (width and height must be > 0)
         if rows <= 0 or cols <= 0:
             return jsonify({"error": "Invalid terminal size received"}), 400
 
-        # ✅ Reset board if terminal size has changed
         if state.previous_terminal_size == (None, None) or state.previous_terminal_size != (rows, cols):
-            requests.post(DIMENSIONS_API_URL, json={"rows": rows, "cols": cols})  # Reset board size
             state.previous_terminal_size = (rows, cols)
 
-        # ✅ Load and scale image
-        image = Image.open(request.files["image"]).convert("RGB")  # Ensure it's in RGB format
-        image = image.resize((max(1, cols), max(1, rows)))  # ✅ Prevent zero-sized images
-
+        image = Image.open(request.files["image"]).convert("RGB")
+        image = image.resize((max(1, cols), max(1, rows)))
         width, height = image.size
 
         for y in range(height):
             for x in range(width):
-                pixel = image.getpixel((x, y))  # Get RGB value as a tuple
-                color_name = closest_color(pixel)  # 🔥 Find closest match
-
+                pixel = image.getpixel((x, y))
+                color_name = closest_color(pixel)
                 if color_name:
-                    requests.post(
-                        "http://127.0.0.1:5000/set_color",
-                        json={"x": x, "y": y, "color": color_name},
-                        headers={"Content-Type": "application/json"},
-                    )
+                    board.set_color(x, y, color_name)
 
         board.board_loaded = True
         return jsonify({"message": "Image processed successfully"}), 200
 
-
+    # ------------------------------------------------------------------ #
+    # Piet interpreter routes                                              #
+    # ------------------------------------------------------------------ #
 
     @app.route('/start_execution', methods=['GET'])
     def start_execution():
-        #data = request.json
-        #program = data.get('program')
-        #if not program:
-        #    return jsonify({"error": "No program provided"}), 400
-
+        if state.interpreter is None:
+            return jsonify({"error": "Interpreter not initialized"}), 400
         if state.execution_thread and state.execution_thread.is_alive():
             return jsonify({"message": "Execution is already running"}), 400
 
@@ -252,61 +174,151 @@ def register_routes(app, board):
             while not state.interpreter.has_terminated() and not state.stop_execution_flag.is_set():
                 with state.execution_lock:
                     state.interpreter.step()
-                time.sleep(0.1)  # Adjust sleep duration as needed
+                time.sleep(0.1)
 
         state.execution_thread = threading.Thread(target=execute_program, daemon=True)
         state.execution_thread.start()
-
         return jsonify({"message": "Execution started"}), 200
 
     @app.route('/stop_execution', methods=['GET'])
     def stop_execution():
         if state.execution_thread and state.execution_thread.is_alive():
             state.stop_execution_flag.set()
-            state.execution_thread.join()
+            state.execution_thread.join(timeout=3)
             return jsonify({"message": "Execution stopped"}), 200
-        else:
-            return jsonify({"message": "No execution is currently running"}), 400
+        return jsonify({"message": "No execution is currently running"}), 400
 
     @app.route('/current_codel', methods=['GET'])
     def current_codel():
         if state.interpreter is None:
-            return jsonify({"error": "Interpreter not initialized"}), 400
-
+            return jsonify({"current_codel": None, "initialized": False}), 200
         with state.execution_lock:
             codel_position = state.interpreter.get_current_codel_position()
-            return jsonify({"current_codel": codel_position}), 200
-        
+            return jsonify({"current_codel": list(codel_position), "initialized": True}), 200
+
     @app.route('/load_piet', methods=['GET'])
     def load_piet():
         if board.board_loaded:
             with state.interpreter_lock:
                 state.interpreter = PietInterpreter(board.board)
                 return jsonify({"message": "Interpreter initialized"}), 200
-        else:
-            return jsonify({'error': "Board is not loaded"})
+        return jsonify({"error": "Board is not loaded"}), 400
 
     @app.route('/get_output', methods=['GET'])
     def get_output():
-        def fetch_output():
-            nonlocal output_data
-            with state.output_lock:
-                if state.interpreter_output:
-                    output_data = state.interpreter_output
+        with state.output_lock:
+            if state.interpreter_output:
+                return jsonify({"output": state.interpreter_output}), 200
+        return jsonify({"error": "No output available"}), 204
 
-        output_data = None
-        output_thread = threading.Thread(target=fetch_output)
-        output_thread.start()
-        output_thread.join(timeout=3)  # Wait for up to 3 seconds
-
-        if output_data is not None:
-            return jsonify({"output": output_data}), 200
-        else:
-            return jsonify({"error": "No output available"}), 204  # No Content
-        
     @app.route('/board_status', methods=['GET'])
     def board_status():
-        if (board.board_loaded == True):
-            return jsonify({"loaded":True}), 200
-        else:
-            return jsonify({"loaded":False}), 400
+        return jsonify({"loaded": board.board_loaded}), 200
+
+    # ------------------------------------------------------------------ #
+    # Battle / Corewar routes                                              #
+    # ------------------------------------------------------------------ #
+
+    if battle_manager is None:
+        return  # No battle manager; skip battle routes
+
+    @app.route('/battle/join', methods=['POST'])
+    def join_game():
+        data = request.json or {}
+        player_id = data.get('player_id')
+        name = data.get('name', player_id)
+        if not player_id:
+            return jsonify({"error": "Missing player_id"}), 400
+        result = battle_manager.register_player(player_id, name)
+        return jsonify(result), 200 if "success" in result else 400
+
+    @app.route('/battle/leave', methods=['POST'])
+    def leave_game():
+        data = request.json or {}
+        player_id = data.get('player_id')
+        if not player_id:
+            return jsonify({"error": "Missing player_id"}), 400
+        result = battle_manager.unregister_player(player_id)
+        return jsonify(result), 200 if "success" in result else 400
+
+    @app.route('/battle/upload_program/<player_id>', methods=['POST'])
+    def upload_player_program(player_id):
+        """Upload a PNG image as a player's zone program."""
+        if "image" not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
+
+        player = battle_manager.players.get(player_id)
+        if not player:
+            return jsonify({"error": f"Player {player_id} not registered"}), 404
+
+        bounds = battle_manager.get_zone_bounds(player.zone)
+        x0, x1, y0, y1 = bounds
+        zone_w = x1 - x0
+        zone_h = y1 - y0
+
+        image = Image.open(request.files["image"]).convert("RGB")
+        image = image.resize((zone_w, zone_h))
+
+        for y in range(zone_h):
+            for x in range(zone_w):
+                pixel = image.getpixel((x, y))
+                color_name = closest_color(pixel)
+                if color_name:
+                    board.set_color(x0 + x, y0 + y, color_name)
+
+        board.board_loaded = True
+        return jsonify({"message": f"Program uploaded for {player_id}"}), 200
+
+    @app.route('/battle/set_color/<player_id>', methods=['POST'])
+    def set_player_color(player_id):
+        """Set a color within a player's zone."""
+        data = request.json or {}
+        x, y, color = data.get('x'), data.get('y'), data.get('color')
+        if x is None or y is None or color is None:
+            return jsonify({"error": "Missing x, y, or color"}), 400
+
+        player = battle_manager.players.get(player_id)
+        if not player:
+            return jsonify({"error": f"Player {player_id} not found"}), 404
+
+        bounds = battle_manager.get_zone_bounds(player.zone)
+        x0, x1, y0, y1 = bounds
+        if not (x0 <= x < x1 and y0 <= y < y1):
+            return jsonify({"error": "Coordinates outside player zone"}), 400
+
+        board.set_color(x, y, color)
+        board.board_loaded = True
+        return jsonify({"success": True}), 200
+
+    @app.route('/battle/start', methods=['GET'])
+    def start_battle():
+        result = battle_manager.start_battle()
+        return jsonify(result), 200 if "success" in result else 400
+
+    @app.route('/battle/stop', methods=['GET'])
+    def stop_battle():
+        result = battle_manager.stop_battle()
+        return jsonify(result), 200
+
+    @app.route('/battle/status', methods=['GET'])
+    def battle_status():
+        return jsonify(battle_manager.get_status()), 200
+
+    @app.route('/battle/winner', methods=['GET'])
+    def get_winner():
+        return jsonify({"winner": battle_manager.winner}), 200
+
+    @app.route('/battle/layout', methods=['GET'])
+    def get_layout():
+        return jsonify(battle_manager.get_zone_layout()), 200
+
+    @app.route('/battle/reset', methods=['POST'])
+    def reset_battle():
+        battle_manager.stop_battle()
+        battle_manager.arena_ownership.clear()
+        battle_manager.players.clear()
+        battle_manager.interpreters.clear()
+        battle_manager.winner = None
+        battle_manager.step_count = 0
+        battle_manager.reset_arena()
+        return jsonify({"success": True, "message": "Battle reset"}), 200

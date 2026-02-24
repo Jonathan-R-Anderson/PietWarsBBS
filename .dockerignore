@@ -1,0 +1,18 @@
+# AI assistant metadata
+.claude/
+.codex/
+.cursor/
+.aider*
+.continue/
+.github/copilot-instructions.md
+.windsurf/
+.roo/
+
+# Prompt/chat artifacts
+prompts/
+prompt/
+*.prompt
+*.prompts
+chat_history*
+llm_notes*
+

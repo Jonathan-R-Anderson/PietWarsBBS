@@ -4,3 +4,5 @@ aiohttp
 thefuzz
 telnetlib3
 Pillow
+stem
+PySocks

@@ -1,9 +1,4 @@
-PySocks
-stem
-kademlia
-pillow
-termgl
 flask
 requests
 numpy
-textual==0.44.0
+Pillow

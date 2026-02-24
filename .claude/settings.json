@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/home/bruns/Documents/PietWarsBBS/src/renderer/bbs_styles.css:*)",
+      "Bash(/home/bruns/Documents/PietWarsBBS/src/renderer/styles.css:*)",
+      "Bash(/home/bruns/Documents/PietWarsBBS/client.py:*)"
+    ],
+    "additionalDirectories": [
+      "/home/bruns/Documents/PietWarsBBS"
+    ]
+  }
+}

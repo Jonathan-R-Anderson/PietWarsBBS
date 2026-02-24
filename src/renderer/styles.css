@@ -1,30 +1,135 @@
-#left_panel {
-    width: 30%;
-    height: 90%; /* Adjusted to leave space for the marquee */
+/* ═══════════════════════════════════════════════════════
+   PietWars Board Renderer — Cyberpunk Aesthetic
+   Cyan/magenta neon on near-black background
+   ═══════════════════════════════════════════════════════ */
+
+Screen {
+    background: #000000;
+    color: #e5e5e5;
+    /* Near white default text */
 }
 
-#middle_panel {
-    width: 35%;
-    height: 90%; /* Adjusted to leave space for the marquee */
+Header {
+    background: #1e1e1e;
+    color: #ffffff;
+    text-style: bold;
+    border-bottom: double #444444;
 }
+
+Footer {
+    background: #1e1e1e;
+    color: #aaaaaa;
+    border-top: double #444444;
+}
+
+/* ── Main two-column layout ──────────────────────────── */
+
+#main_layout {
+    height: 1fr;
+    width: 100%;
+}
+
+/* ── Board panel (left 3/4) ──────────────────────────── */
+
+#board_panel {
+    width: 3fr;
+    height: 100%;
+    border: tall #444444;
+    background: #000000;
+    padding: 1 2;
+}
+
+/* ── Right info column ───────────────────────────────── */
 
 #right_panel {
-    width: 35%;
-    height: 90%; /* Adjusted to leave space for the marquee */
+    width: 1fr;
+    height: 100%;
+    padding: 0 0 0 1;
 }
 
-#marquee {
-    width: 100%;
-    height: 10%; /* Occupies the bottom 10% */
-    align: center middle; /* Centered horizontally */
-}
-
-#codel_overlay {
-    position: absolute;
-    align: left bottom;
-    width: auto;
+#game_title {
     height: auto;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 1 2;
-    border: round yellow;
+    content-align: center middle;
+    text-style: bold italic;
+    color: #00ff41;
+    border-bottom: double #333333;
+    padding: 1 0;
+    margin-bottom: 1;
+}
+
+/* ── Status panel ────────────────────────────────────── */
+
+#status_panel {
+    height: auto;
+    border: panel #00ff41;
+    background: #0d0d0d;
+    padding: 1 1;
+    color: white;
+    margin-bottom: 1;
+}
+
+/* ── Battle panel ────────────────────────────────────── */
+
+#battle_panel {
+    height: 1fr;
+    border: panel #444444;
+    background: #000000;
+    padding: 1 1;
+    color: #e5e5e5;
+    margin-bottom: 1;
+}
+
+/* ── Palette ─────────────────────────────────────────── */
+
+#palette_panel {
+    height: auto;
+    border: heavy #ffff00;
+    background: #141400;
+    padding: 1 1;
+}
+
+/* ── Output ticker ───────────────────────────────────── */
+
+#output_ticker {
+    height: auto;
+    width: 100%;
+    background: #000000;
+    border-top: double #333333;
+    padding: 0 1;
+    color: #00ff41;
+}
+
+Rule {
+    color: #222244;
+}
+
+#resize_bar {
+    height: auto;
+    width: 100%;
+    background: #080808;
+    border-top: solid #202020;
+    padding: 0 1;
+}
+
+#resize_hint {
+    width: 1fr;
+    color: #666666;
+}
+
+#resize_handle {
+    width: 38;
+    color: #00ff41;
+    text-style: bold;
+    background: #101010;
+    border: round #00aa2b;
+    padding: 0 2;
+}
+
+#resize_preview {
+    width: 100%;
+    height: 100%;
+    content-align: center middle;
+    color: #00ff41;
+    background: #000000;
+    border: heavy #00aa2b;
 }

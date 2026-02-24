@@ -1,47 +1,162 @@
+/* ═══════════════════════════════════════════════════════
+   Evil BBS — Retro Hacker Terminal Aesthetic
+   Green-on-black with neon accents
+   ═══════════════════════════════════════════════════════ */
+
 Screen {
-    background: black;
-    color: green;
+    background: #0a0a0a;
+    color: #00ff41;
+    layers: base top;
 }
 
 #wallpaper {
-    layer: below;
-    opacity: 0.3;
-    dock: top;
-    width: 100%;
-    height: 100%;
+    layer: base;
 }
 
-#main_layout {
-    height: 100%;
-    align-horizontal: center;
-    align-vertical: middle;
+Header {
+    background: #1a1a1a;
+    color: #00ff41;
+    text-style: bold;
+    border-bottom: double #333333;
 }
 
-#menu_panel {
-    width: 25%;
-    min-width: 20;
-    border: round green;
-    padding: 1 2;
-    dock: left;
-    align: center top;
+Footer {
+    background: #1a1a1a;
+    color: #888888;
+    border-top: double #333333;
 }
 
-#content {
-    width: 75%;
-    padding: 1 2;
-    dock: right;
-}
+/* ── Banner ─────────────────────────────────────────── */
 
-FancyListView {
+#banner {
     height: auto;
     width: 100%;
-    background: black;
-    border: round green;
+    content-align: center middle;
+    padding: 1 2;
+    background: #000000;
+}
+
+#banner_rule {
+    color: #333333;
+    background: #000000;
+}
+
+/* ── Main layout ─────────────────────────────────────── */
+
+#main_layout {
+    height: 1fr;
+    width: 100%;
+}
+
+/* ── Left menu panel ─────────────────────────────────── */
+
+#menu_panel {
+    width: 30;
+    border: tall #333333;
+    background: #0d0d0d;
+    padding: 0 1;
+}
+
+#menu_title {
+    height: 3;
+    content-align: center middle;
+    color: #00ff00;
+    text-style: bold;
+    border-bottom: solid #004400;
 }
 
 FancyMenuItem {
-    height: auto;
+    background: #001100;
+    color: #009900;
     padding: 0 1;
-    background: black;
-    color: green;
+    height: 1;
+}
+
+/* ── Right content area ──────────────────────────────── */
+
+#content_area {
+    width: 1fr;
+    padding: 0 1;
+}
+
+#sysinfo_panel {
+    height: auto;
+    border: round #004400;
+    background: #000800;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+#clock {
+    color: #ffff00;
+    text-style: bold;
+    padding: 0;
+    height: 1;
+}
+
+#api_status {
+    color: #00ff00;
+    height: 1;
+    padding: 0;
+}
+
+#battle_status {
+    color: #00ccff;
+    height: 1;
+    padding: 0;
+}
+
+#content {
+    height: 1fr;
+    border: round #003300;
+    background: #000500;
+    padding: 1 2;
+    color: #00cc00;
+}
+
+/* ── Ticker ──────────────────────────────────────────── */
+
+#ticker {
+    height: 1;
+    background: #001400;
+    color: #00ff00;
+    padding: 0 1;
+    border-top: solid #004400;
+}
+
+/* ── Game sub-menu ───────────────────────────────────── */
+
+#game_layout {
+    height: 1fr;
+    width: 100%;
+}
+
+#game_menu_panel {
+    width: 32;
+    border: heavy #00ff00;
+    background: #001100;
+    padding: 1 1;
+}
+
+#game_title {
+    height: 4;
+    content-align: center middle;
+    color: #00ff00;
+    text-style: bold;
+}
+
+#game_info_panel {
+    width: 1fr;
+    border: heavy #006600;
+    background: #001400;
+    padding: 1 2;
+    color: #00ff00;
+}
+
+#game_description {
+    color: #00cc00;
+}
+
+Rule {
+    color: #004400;
 }
