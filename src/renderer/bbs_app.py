@@ -430,7 +430,11 @@ class MainMenuScreen(Screen):
         if normalized == "games":
             await self.app.push_screen(GameMenuScreen())
             return
-        if normalized in ("whos on", "who s on", "whose on", "whoon", "whoson"):
+        raw = str(label).lower()
+        if (
+            normalized in ("whos on", "who s on", "whose on", "whoon", "whoson")
+            or ("who" in raw and "on" in raw)
+        ):
             await self.app.push_screen(WhosOnScreen())
             return
         body = self.CONTENT_MAP.get(label, f"[bold]{label}[/]\n\nComing soon.")
@@ -455,6 +459,7 @@ class BBSApp(App):
     CSS_PATH = str(Path(__file__).resolve().parent / "bbs_styles.css")
 
     BINDINGS = [
+        ("w", "open_whos_on_global", "Who's On"),
         ("q",     "quit",        "Quit"),
     ]
 
@@ -471,6 +476,11 @@ class BBSApp(App):
         if self.background_music:
             audio.play_background(self.background_music)
         self.push_screen(LoginScreen())
+
+    async def action_open_whos_on_global(self) -> None:
+        """Global hard fallback: open Who's On from main menu regardless of focus."""
+        if isinstance(self.screen, MainMenuScreen):
+            await self.push_screen(WhosOnScreen())
 
 
 if __name__ == "__main__":
