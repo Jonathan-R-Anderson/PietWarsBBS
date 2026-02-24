@@ -6,6 +6,8 @@ import string
 import threading
 import time
 import hashlib
+import errno
+import fcntl
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -84,6 +86,8 @@ class PlayerDirectoryService:
         self.peer_port = int(os.getenv("P2P_PEER_PORT", "5001"))
         self.state_dir = Path(os.getenv("P2P_STATE_DIR", "/data/p2p")).resolve()
         self.identity_path = self.state_dir / "identity.json"
+        self.sessions_path = self.state_dir / "sessions.json"
+        self.sessions_lock_path = self.state_dir / "sessions.lock"
         self.hs_dir = self.state_dir / "hidden_service"
         self.hs_hostname = self.hs_dir / "hostname"
         self.hs_private_key = self.hs_dir / "hs_ed25519_secret_key"
@@ -97,6 +101,7 @@ class PlayerDirectoryService:
         self.onion = ""
         self.listen_host = "0.0.0.0"
         self.listen_port = self.peer_port
+        self.session_id = f"{os.getpid()}-{_rand_id(8)}"
 
         self._tor_process = None
         self._server = None
@@ -198,7 +203,23 @@ class PlayerDirectoryService:
     def list_active_users(self) -> List[dict]:
         cutoff = time.time() - 120
         with self._lock:
-            rows = [r.to_dict() for r in self._directory.values() if r.seen_at >= cutoff]
+            merged: Dict[str, dict] = {
+                r.handle: r.to_dict()
+                for r in self._directory.values()
+                if r.seen_at >= cutoff
+            }
+
+        # Merge in shared local sessions (multiple telnet users on same server).
+        for rec in self._read_shared_sessions().values():
+            handle = rec.get("handle")
+            if not handle:
+                continue
+            if float(rec.get("seen_at", 0.0)) < cutoff:
+                continue
+            if handle not in merged or float(rec.get("seen_at", 0.0)) >= float(merged[handle].get("seen_at", 0.0)):
+                merged[handle] = rec
+
+        rows = list(merged.values())
         rows.sort(key=lambda r: r["handle"].lower())
         return rows
 
@@ -263,6 +284,52 @@ class PlayerDirectoryService:
         }
         self.identity_path.write_text(json.dumps(payload))
 
+    def _read_shared_sessions(self) -> Dict[str, dict]:
+        if not self.sessions_path.exists():
+            return {}
+        try:
+            obj = json.loads(self.sessions_path.read_text())
+            if isinstance(obj, dict):
+                out: Dict[str, dict] = {}
+                for k, v in obj.items():
+                    if isinstance(v, dict):
+                        out[str(k)] = v
+                return out
+        except Exception:
+            pass
+        return {}
+
+    def _write_shared_sessions(self, data: Dict[str, dict]) -> None:
+        tmp_path = self.sessions_path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(data))
+        os.replace(tmp_path, self.sessions_path)
+
+    def _upsert_shared_record(self) -> None:
+        now = time.time()
+        with self._lock:
+            payload = {
+                "username": self.username,
+                "unique_id": self.unique_id,
+                "handle": self.get_local_handle(),
+                "onion": self.onion,
+                "port": self.listen_port,
+                "seen_at": now,
+            }
+
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.sessions_lock_path, "a+", encoding="utf-8") as lockf:
+            fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+            data = self._read_shared_sessions()
+            # Prune stale sessions before writing.
+            cutoff = now - 180
+            data = {
+                sid: rec for sid, rec in data.items()
+                if float(rec.get("seen_at", 0.0)) >= cutoff
+            }
+            data[self.session_id] = payload
+            self._write_shared_sessions(data)
+            fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
+
     def _load_or_create_hidden_service_identity(self) -> None:
         self.hs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -304,17 +371,19 @@ class PlayerDirectoryService:
             username=self.username,
             unique_id=self.unique_id,
             onion=self.onion,
-            port=self.peer_port,
+            port=self.listen_port,
             seen_at=time.time(),
         )
         with self._lock:
             self._directory[rec.handle] = rec
+        self._upsert_shared_record()
 
     def _serve(self) -> None:
         try:
             self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._server.bind((self.listen_host, self.peer_port))
+            self.listen_port = int(self._server.getsockname()[1])
             self._server.listen(64)
             if self.bootstrap_mode:
                 self._bootstrap_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -328,6 +397,12 @@ class PlayerDirectoryService:
                 ).start()
             self._accept_loop(self._server)
         except Exception as exc:
+            if isinstance(exc, OSError) and exc.errno == errno.EADDRINUSE:
+                logger.warning(
+                    "P2P listener port %d already in use; running in directory-only mode for this session",
+                    self.peer_port,
+                )
+                return
             logger.error("P2P server failed: %s", exc)
 
     def _accept_loop(self, server_socket: socket.socket) -> None:
