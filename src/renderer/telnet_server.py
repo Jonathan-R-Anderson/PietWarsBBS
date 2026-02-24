@@ -119,38 +119,38 @@ async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWrit
     env['COLUMNS'] = str(default_cols)
     env['LINES']   = str(default_rows)
 
-    # Open /dev/null for stderr so log StreamHandler output never reaches the
-    # PTY (and therefore never corrupts the Textual GUI on the telnet client).
-    # Logs still reach the file via the FileHandler configured in logging_config.
-    devnull_fd = os.open(os.devnull, os.O_WRONLY)
     logger.debug("Launching BBS application %s", bbs_path)
-    try:
-        process = await asyncio.create_subprocess_exec(
-            sys.executable,
-            bbs_path,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=devnull_fd,
-            env=env,
-        )
-    finally:
-        os.close(devnull_fd)
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        bbs_path,
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+    )
     logger.debug("BBS subprocess started with PID %s", process.pid)
     os.close(slave_fd)
     loop = asyncio.get_running_loop()
 
     # --- NAWS negotiation ------------------------------------------------
     # Ask the client to send us its window size.
-    # IAC DO NAWS → "please tell me your terminal dimensions"
-    try:
-        if hasattr(writer, "iac"):
-            writer.iac(DO, NAWS)
-            logger.debug("Sent IAC DO NAWS via writer.iac")
-        else:
-            writer.protocol.transport.write(bytes([IAC, DO, NAWS]))
-            logger.debug("Sent IAC DO NAWS via raw transport")
-    except Exception:
-        logger.debug("Could not send IAC DO NAWS (transport not available yet)")
+    # IAC DO NAWS -> "please tell me your terminal dimensions"
+    async def request_naws() -> None:
+        for attempt in range(10):
+            try:
+                if hasattr(writer, "iac"):
+                    writer.iac(DO, NAWS)
+                    logger.debug("Sent IAC DO NAWS via writer.iac")
+                    return
+                transport = getattr(getattr(writer, "protocol", None), "transport", None)
+                if transport is not None:
+                    transport.write(bytes([IAC, DO, NAWS]))
+                    logger.debug("Sent IAC DO NAWS via raw transport")
+                    return
+            except Exception:
+                pass
+            await asyncio.sleep(0.1)
+        logger.debug("Could not send IAC DO NAWS after retries")
 
     # Track current size so we only resize when it actually changes
     _current_size: list[tuple[int, int]] = [(default_cols, default_rows)]
@@ -179,7 +179,9 @@ async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWrit
             except Exception:
                 pass
 
+    naws_request_task = asyncio.create_task(request_naws())
     naws_task = asyncio.create_task(monitor_naws())
+    child_exited = asyncio.Event()
 
     # --- I/O forwarding --------------------------------------------------
 
@@ -201,12 +203,40 @@ async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWrit
                 await writer.drain()
         except Exception:
             logger.exception("Error while forwarding output")
+        finally:
+            child_exited.set()
+
+    async def forward_stderr() -> None:
+        if process.stderr is None:
+            return
+        try:
+            while True:
+                line = await process.stderr.readline()
+                if not line:
+                    break
+                logger.error("BBS stderr: %s", line.decode(errors="replace").rstrip())
+        except Exception:
+            logger.exception("Error while forwarding child stderr")
+
+    async def watch_child_exit() -> None:
+        rc = await process.wait()
+        logger.debug("BBS subprocess exited with code %s", rc)
+        child_exited.set()
+        try:
+            writer.close()
+        except Exception:
+            pass
 
     output_task = asyncio.create_task(forward_output())
+    stderr_task = asyncio.create_task(forward_stderr())
+    exit_task = asyncio.create_task(watch_child_exit())
 
     try:
-        while True:
-            data = await reader.read(1024)
+        while not child_exited.is_set():
+            try:
+                data = await asyncio.wait_for(reader.read(1024), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
             if not data:
                 logger.debug("Telnet client closed connection")
                 break
@@ -215,12 +245,18 @@ async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWrit
         logger.exception("Error while reading from telnet client")
     finally:
         naws_task.cancel()
+        naws_request_task.cancel()
         output_task.cancel()
+        stderr_task.cancel()
+        exit_task.cancel()
         try:
             process.terminate()
         except ProcessLookupError:
             logger.debug("BBS subprocess already terminated")
-        await process.wait()
+        try:
+            await process.wait()
+        except Exception:
+            pass
         os.close(master_fd)
         logger.debug("Closed connection and cleaned up")
 

@@ -171,46 +171,66 @@ class LoginScreen(Screen):
             yield self.username_input
             self.seed_input = Input(password=True, placeholder="ID seed (private)", id="login_seed")
             yield self.seed_input
-            yield Button("Enter BBS", id="login_submit")
+            self.submit_button = Button("Enter BBS", id="login_submit")
+            yield self.submit_button
+            self.status = Static("", id="login_status")
+            yield self.status
         yield Footer()
 
     def on_mount(self) -> None:
         self.username_input.focus()
 
-    def action_submit_login(self) -> None:
+    async def action_submit_login(self) -> None:
+        if self.submit_button.disabled:
+            logger.debug("Login submit ignored: already in progress")
+            return
+        logger.debug("Login submit triggered")
         username = self.username_input.value.strip()
         seed = self.seed_input.value.strip()
+        logger.debug("Login attempt for username=%s seed_len=%d", username, len(seed))
         if not username or not seed:
-            self.app.notify("Username and ID seed are required", severity="error")
+            self.status.update("[red]Username and ID seed are required[/red]")
+            logger.debug("Login rejected: missing username or seed")
             return
+        self.submit_button.disabled = True
+        self.status.update("[dim]Signing in...[/dim]")
         try:
             svc = kademlia.get_service()
             svc.set_identity(username, seed)
+            logger.debug("Identity set for handle=%s", svc.get_local_handle())
         except Exception as exc:
-            self.app.notify(f"P2P login failed: {exc}", severity="error")
+            self.status.update(f"[red]P2P login failed: {exc}[/red]")
+            self.submit_button.disabled = False
+            logger.exception("Login failed in set_identity")
             return
 
         def _start_p2p() -> None:
             try:
                 svc.start()
                 self.app.call_from_thread(
-                    self.app.notify,
-                    f"Logged in as {svc.get_local_handle()}",
-                    severity="information",
+                    self.status.update,
+                    f"[green]Logged in as {svc.get_local_handle()}[/green]",
                 )
             except Exception as exc:
                 self.app.call_from_thread(
-                    self.app.notify,
-                    f"P2P startup failed: {exc}",
-                    severity="error",
+                    self.status.update,
+                    f"[red]P2P startup failed: {exc}[/red]",
                 )
+                self.app.call_from_thread(setattr, self.submit_button, "disabled", False)
 
         threading.Thread(target=_start_p2p, daemon=True).start()
-        self.app.push_screen(MainMenuScreen())
+        logger.debug("P2P start thread launched; pushing MainMenuScreen")
+        await self.app.push_screen(MainMenuScreen())
+        logger.debug("MainMenuScreen pushed")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "login_submit":
-            self.action_submit_login()
+            await self.action_submit_login()
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Submit login when Enter is pressed in username/seed fields."""
+        if event.input.id in ("login_username", "login_seed"):
+            await self.action_submit_login()
 
 
 class GameMenuScreen(Screen):
@@ -422,7 +442,7 @@ class MainMenuScreen(Screen):
         await self._handle_menu_selection(label)
 
     async def action_open_whos_on(self) -> None:
-        await self.app.push_screen(WhosOnScreen())
+        await self._open_whos_on()
 
     async def _handle_menu_selection(self, label: str) -> None:
         normalized = "".join(ch for ch in str(label).lower() if ch.isalnum() or ch.isspace()).strip()
@@ -435,10 +455,21 @@ class MainMenuScreen(Screen):
             normalized in ("whos on", "who s on", "whose on", "whoon", "whoson")
             or ("who" in raw and "on" in raw)
         ):
-            await self.app.push_screen(WhosOnScreen())
+            await self._open_whos_on()
             return
         body = self.CONTENT_MAP.get(label, f"[bold]{label}[/]\n\nComing soon.")
         self.content.update(body + "\n\n[dim]Press a menu item to continue.[/]")
+
+    async def _open_whos_on(self) -> None:
+        try:
+            self.app.notify("Opening Who's On...", severity="information", timeout=0.8)
+            await self.app.push_screen(WhosOnScreen())
+        except Exception as exc:
+            logger.exception("Failed to open Who's On screen")
+            self.content.update(
+                "[bold red]Failed to open Who's On[/]\n\n"
+                f"[dim]{exc}[/dim]"
+            )
 
     async def on_key(self, event: events.Key) -> None:
         key = event.key
@@ -480,7 +511,7 @@ class BBSApp(App):
     async def action_open_whos_on_global(self) -> None:
         """Global hard fallback: open Who's On from main menu regardless of focus."""
         if isinstance(self.screen, MainMenuScreen):
-            await self.push_screen(WhosOnScreen())
+            await self.screen._open_whos_on()
 
 
 if __name__ == "__main__":
