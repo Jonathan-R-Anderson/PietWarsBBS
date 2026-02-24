@@ -15,6 +15,7 @@ import requests
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Label, ListView, Rule
 from textual.containers import Container, Horizontal, Vertical
+from textual import events
 try:
     from .fancy_menu import FancyListView, FancyMenuItem
 except ImportError:
@@ -242,6 +243,10 @@ class MainMenuScreen(Screen):
         "Your Statistics": "[bold]Your Statistics[/]\n\nGame scores and history.",
     }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.directory_handles: list[str] = []
+
     def compose(self) -> ComposeResult:
         logger.debug("Composing MainMenuScreen")
         yield ANSIWallpaper(self.app.wallpaper, id="wallpaper")
@@ -297,9 +302,44 @@ class MainMenuScreen(Screen):
         logger.debug("Main menu selected: %s", label)
         if label == "Games":
             await self.app.push_screen(GameMenuScreen())
+        elif label == "Who's On":
+            self._show_directory()
         else:
             body = self.CONTENT_MAP.get(label, f"[bold]{label}[/]\n\nComing soon.")
             self.content.update(body + "\n\n[dim]Press a menu item to continue.[/]")
+
+    def _show_directory(self) -> None:
+        try:
+            svc = kademlia.get_service()
+            me = svc.get_local_handle()
+            users = [u for u in svc.list_active_users() if u.get("handle") != me]
+            self.directory_handles = [u.get("handle", "") for u in users][:9]
+            lines = ["[bold bright_cyan]Active Users[/]"]
+            lines.append(f"[dim]You are {me}[/dim]")
+            lines.append("")
+            if not self.directory_handles:
+                lines.append("[dim]No other active users discovered yet[/dim]")
+            else:
+                for i, handle in enumerate(self.directory_handles, start=1):
+                    lines.append(f"[yellow]{i}[/yellow]. [green]{handle}[/green]")
+                lines.append("")
+                lines.append("[dim]Press 1-9 to send direct invite[/dim]")
+            self.content.update("\n".join(lines))
+        except Exception:
+            self.directory_handles = []
+            self.content.update("[dim]Directory unavailable[/dim]")
+
+    async def on_key(self, event: events.Key) -> None:
+        if not self.directory_handles:
+            return
+        key = event.key
+        if key.isdigit():
+            idx = int(key) - 1
+            if 0 <= idx < len(self.directory_handles):
+                handle = self.directory_handles[idx]
+                ok, msg = kademlia.get_service().invite_handle(handle)
+                self.app.notify(msg, severity="information" if ok else "error")
+                event.stop()
 
     async def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if self.app.scroll_sound:

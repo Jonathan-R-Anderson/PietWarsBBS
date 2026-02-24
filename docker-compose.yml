@@ -17,6 +17,7 @@ services:
       - api
     ports:
       - "1337:1337"
+      - "5001:5001"
       - "7331:7331"
     stdin_open: true
     tty: true
@@ -28,6 +29,7 @@ services:
       - P2P_BOOTSTRAP_MODE=${P2P_BOOTSTRAP_MODE:-false}
       - P2P_BOOTSTRAP_HOST=${P2P_BOOTSTRAP_HOST:-}
       - P2P_BOOTSTRAP_PORT=${P2P_BOOTSTRAP_PORT:-7331}
+      - P2P_PEER_PORT=${P2P_PEER_PORT:-5001}
       - PLAYER_USERNAME=${PLAYER_USERNAME:-}
       - PLAYER_UNIQUE_ID=${PLAYER_UNIQUE_ID:-}
     volumes:

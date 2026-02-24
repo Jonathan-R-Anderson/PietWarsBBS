@@ -81,6 +81,7 @@ class PlayerDirectoryService:
         self.bootstrap_mode = os.getenv("P2P_BOOTSTRAP_MODE", "false").lower() == "true"
         self.bootstrap_host = os.getenv("P2P_BOOTSTRAP_HOST", "")
         self.bootstrap_port = int(os.getenv("P2P_BOOTSTRAP_PORT", "7331"))
+        self.peer_port = int(os.getenv("P2P_PEER_PORT", "5001"))
         self.state_dir = Path(os.getenv("P2P_STATE_DIR", "/data/p2p")).resolve()
         self.identity_path = self.state_dir / "identity.json"
         self.hs_dir = self.state_dir / "hidden_service"
@@ -95,16 +96,16 @@ class PlayerDirectoryService:
         self.unique_id = ""
         self.onion = ""
         self.listen_host = "0.0.0.0"
-        self.listen_port = int(os.getenv("P2P_LISTEN_PORT", "7332"))
-        if self.bootstrap_mode:
-            self.listen_port = 7331
+        self.listen_port = self.peer_port
 
         self._tor_process = None
         self._server = None
+        self._bootstrap_server = None
         self._running = False
         self._lock = threading.Lock()
         self._peers: Dict[str, tuple[str, int]] = {}
         self._directory: Dict[str, PlayerRecord] = {}
+        self._invites: List[dict] = []
 
     def start(self) -> None:
         if not self.enabled:
@@ -144,6 +145,11 @@ class PlayerDirectoryService:
                 self._server.close()
         except Exception:
             pass
+        try:
+            if self._bootstrap_server:
+                self._bootstrap_server.close()
+        except Exception:
+            pass
         if self._tor_process is not None:
             try:
                 self._tor_process.terminate()
@@ -168,7 +174,7 @@ class PlayerDirectoryService:
             "unique_id": self.unique_id,
             "handle": self.get_local_handle(),
             "onion": self.onion,
-            "port": self.listen_port,
+            "port": self.peer_port,
         }
 
     def list_active_users(self) -> List[dict]:
@@ -182,6 +188,28 @@ class PlayerDirectoryService:
         with self._lock:
             rec = self._directory.get(handle)
             return rec.to_dict() if rec else None
+
+    def list_invites(self) -> List[dict]:
+        with self._lock:
+            return list(self._invites)
+
+    def invite_handle(self, handle: str, message: str = "Join my game") -> tuple[bool, str]:
+        rec = self.resolve_handle(handle)
+        if not rec:
+            return False, f"User {handle} not found"
+        if rec["handle"] == self.get_local_handle():
+            return False, "Cannot invite yourself"
+
+        payload = {
+            "type": "invite",
+            "sender": self.get_local_record(),
+            "target_handle": handle,
+            "message": message,
+        }
+        rsp = self._send_request(rec["onion"], int(rec["port"]), payload, timeout=3.0)
+        if rsp and rsp.get("ok"):
+            return True, f"Invite sent to {handle}"
+        return False, f"Failed to send invite to {handle}"
 
     def _load_or_create_identity(self) -> None:
         # If user provides a seed, always derive the network ID from its hash.
@@ -233,7 +261,7 @@ class PlayerDirectoryService:
                         "ControlPort": "0",
                         "DataDirectory": str(self.tor_data_dir),
                         "HiddenServiceDir": str(self.hs_dir),
-                        "HiddenServicePort": f"{self.listen_port} 127.0.0.1:{self.listen_port}",
+                        "HiddenServicePort": f"{self.peer_port} 127.0.0.1:{self.peer_port}",
                     },
                     take_ownership=True,
                 )
@@ -258,7 +286,7 @@ class PlayerDirectoryService:
             username=self.username,
             unique_id=self.unique_id,
             onion=self.onion,
-            port=self.listen_port,
+            port=self.peer_port,
             seen_at=time.time(),
         )
         with self._lock:
@@ -268,16 +296,32 @@ class PlayerDirectoryService:
         try:
             self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self._server.bind((self.listen_host, self.listen_port))
+            self._server.bind((self.listen_host, self.peer_port))
             self._server.listen(64)
+            if self.bootstrap_mode:
+                self._bootstrap_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._bootstrap_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self._bootstrap_server.bind((self.listen_host, self.bootstrap_port))
+                self._bootstrap_server.listen(64)
+                threading.Thread(
+                    target=self._accept_loop,
+                    args=(self._bootstrap_server,),
+                    daemon=True,
+                ).start()
+            self._accept_loop(self._server)
+        except Exception as exc:
+            logger.error("P2P server failed: %s", exc)
+
+    def _accept_loop(self, server_socket: socket.socket) -> None:
+        try:
             while self._running:
                 try:
-                    client, _ = self._server.accept()
+                    client, _ = server_socket.accept()
                     threading.Thread(target=self._handle_client, args=(client,), daemon=True).start()
                 except OSError:
                     break
-        except Exception as exc:
-            logger.error("P2P server failed: %s", exc)
+        except Exception:
+            pass
 
     def _handle_client(self, client: socket.socket) -> None:
         with client:
@@ -305,6 +349,22 @@ class PlayerDirectoryService:
                         "type": "directory_response",
                         "directory": [r.to_dict() for r in self.list_active_users()],
                     }
+                    client.sendall(json.dumps(response).encode("utf-8"))
+                elif kind == "invite":
+                    self._register_peer(msg.get("sender"))
+                    sender = msg.get("sender") or {}
+                    invite = {
+                        "from_handle": sender.get("handle", "unknown"),
+                        "from_onion": sender.get("onion"),
+                        "from_port": sender.get("port"),
+                        "target_handle": msg.get("target_handle"),
+                        "message": msg.get("message", ""),
+                        "received_at": time.time(),
+                    }
+                    with self._lock:
+                        self._invites.append(invite)
+                        self._invites = self._invites[-50:]
+                    response = {"type": "invite_ack", "ok": True}
                     client.sendall(json.dumps(response).encode("utf-8"))
             except Exception:
                 pass
