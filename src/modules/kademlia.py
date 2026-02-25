@@ -130,7 +130,7 @@ class PlayerDirectoryService:
         self._upsert_local_record()
 
         if not self.bootstrap_mode and self.bootstrap_host:
-            self._bootstrap_once(self.bootstrap_host, self.bootstrap_port)
+            self._bootstrap_refresh()
 
         gossip_thread = threading.Thread(target=self._gossip_loop, daemon=True)
         gossip_thread.start()
@@ -534,6 +534,41 @@ class PlayerDirectoryService:
         for rec in rsp.get("directory", []):
             self._register_peer(rec)
 
+    def _bootstrap_refresh(self) -> None:
+        """
+        Try bootstrap on configured port first, then common fallback port(s).
+        This lets clients discover a bootstrap node even when it is exposed on
+        5001 instead of 7331.
+        """
+        ports = [self.bootstrap_port]
+        if self.peer_port not in ports:
+            ports.append(self.peer_port)
+        if 5001 not in ports:
+            ports.append(5001)
+
+        for port in ports:
+            req = {
+                "type": "bootstrap_request",
+                "sender": self.get_local_record(),
+            }
+            rsp = self._send_request(self.bootstrap_host, int(port), req)
+            if rsp:
+                logger.info("Bootstrap succeeded via %s:%d", self.bootstrap_host, int(port))
+                for peer in rsp.get("peers", []):
+                    if isinstance(peer, list) and len(peer) == 2:
+                        onion, p = peer[0], int(peer[1])
+                        if onion != self.onion or p != self.listen_port:
+                            self._peers[f"{onion}:{p}"] = (onion, p)
+                for rec in rsp.get("directory", []):
+                    self._register_peer(rec)
+                return
+
+        logger.warning(
+            "Bootstrap request failed for %s on candidate ports %s",
+            self.bootstrap_host,
+            ",".join(str(p) for p in ports),
+        )
+
     def _gossip_loop(self) -> None:
         while self._running:
             self._upsert_local_record()
@@ -552,7 +587,7 @@ class PlayerDirectoryService:
                 pass
             elif self.bootstrap_host:
                 # Refresh view from bootstrap periodically in case peer set changed.
-                self._bootstrap_once(self.bootstrap_host, self.bootstrap_port)
+                self._bootstrap_refresh()
 
             time.sleep(10)
 
