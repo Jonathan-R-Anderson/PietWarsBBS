@@ -224,9 +224,19 @@ class PlayerDirectoryService:
         return rows
 
     def resolve_handle(self, handle: str) -> Optional[dict]:
-        with self._lock:
-            rec = self._directory.get(handle)
-            return rec.to_dict() if rec else None
+        target = (handle or "").strip()
+        if not target:
+            return None
+
+        # Prefer the same merged source used by Who's On so lookup and display
+        # stay consistent across multi-session/local shared records.
+        for rec in self.list_active_users():
+            current = str(rec.get("handle", "")).strip()
+            if current == target:
+                return rec
+            if current.lower() == target.lower():
+                return rec
+        return None
 
     def list_invites(self) -> List[dict]:
         with self._lock:
@@ -379,31 +389,53 @@ class PlayerDirectoryService:
         self._upsert_shared_record()
 
     def _serve(self) -> None:
+        peer_ready = False
+        bootstrap_ready = False
+
+        if self.bootstrap_mode:
+            try:
+                self._bootstrap_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._bootstrap_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self._bootstrap_server.bind((self.listen_host, self.bootstrap_port))
+                self._bootstrap_server.listen(64)
+                bootstrap_ready = True
+                logger.info("Bootstrap listener active on %s:%d", self.listen_host, self.bootstrap_port)
+                threading.Thread(
+                    target=self._accept_loop,
+                    args=(self._bootstrap_server,),
+                    daemon=True,
+                ).start()
+            except Exception as exc:
+                logger.error("Bootstrap listener failed on port %d: %s", self.bootstrap_port, exc)
+
         try:
             self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._server.bind((self.listen_host, self.peer_port))
             self.listen_port = int(self._server.getsockname()[1])
             self._server.listen(64)
-            if self.bootstrap_mode:
-                self._bootstrap_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._bootstrap_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self._bootstrap_server.bind((self.listen_host, self.bootstrap_port))
-                self._bootstrap_server.listen(64)
-                threading.Thread(
-                    target=self._accept_loop,
-                    args=(self._bootstrap_server,),
-                    daemon=True,
-                ).start()
-            self._accept_loop(self._server)
+            peer_ready = True
+            logger.info("Peer listener active on %s:%d", self.listen_host, self.listen_port)
         except Exception as exc:
             if isinstance(exc, OSError) and exc.errno == errno.EADDRINUSE:
                 logger.warning(
-                    "P2P listener port %d already in use; running in directory-only mode for this session",
+                    "P2P peer listener port %d already in use; this session will run without peer listener",
                     self.peer_port,
                 )
-                return
-            logger.error("P2P server failed: %s", exc)
+            else:
+                logger.error("P2P peer listener failed: %s", exc)
+
+        if peer_ready:
+            self._accept_loop(self._server)
+            return
+
+        if bootstrap_ready:
+            # Keep the thread alive while bootstrap listener is running.
+            while self._running:
+                time.sleep(0.5)
+            return
+
+        logger.error("No P2P listeners could be started")
 
     def _accept_loop(self, server_socket: socket.socket) -> None:
         try:

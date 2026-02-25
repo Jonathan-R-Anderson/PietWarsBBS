@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from logging_config import setup_logging
+from modules import kademlia
 
 HOST = '0.0.0.0'
 PORT = 1337
@@ -262,6 +263,22 @@ async def run_app(reader: telnetlib3.TelnetReader, writer: telnetlib3.TelnetWrit
 
 
 async def main() -> None:
+    # Start a global P2P service in the long-lived renderer process so
+    # bootstrap port 7331 stays open even when no user session is logged in.
+    try:
+        svc = kademlia.get_service()
+        if not svc.unique_id:
+            svc.set_identity(os.getenv("PLAYER_USERNAME", "bootstrap"), os.getenv("PLAYER_UNIQUE_ID", "bootstrap"))
+        svc.start()
+        logger.debug(
+            "Global P2P service started in telnet server process (bootstrap_mode=%s, peer_port=%s, bootstrap_port=%s)",
+            svc.bootstrap_mode,
+            svc.peer_port,
+            svc.bootstrap_port,
+        )
+    except Exception:
+        logger.exception("Failed to start global P2P service")
+
     logger.debug("Starting telnet server on %s:%s", HOST, PORT)
     server = await telnetlib3.create_server(host=HOST, port=PORT, shell=run_app)
     try:
